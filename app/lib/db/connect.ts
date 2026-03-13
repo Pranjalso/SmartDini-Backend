@@ -1,10 +1,6 @@
 import mongoose from 'mongoose';
 
-const MONGODB_URI = process.env.MONGODB_URI!;
-
-if (!MONGODB_URI) {
-  throw new Error('Please define MONGODB_URI in .env.local');
-}
+const MONGODB_URI = process.env.MONGODB_URI;
 
 interface Cached {
   conn: typeof mongoose | null;
@@ -22,6 +18,10 @@ if (!cached) {
 }
 
 async function connectDB() {
+  if (!MONGODB_URI) {
+    throw new Error('Please define MONGODB_URI in .env.local');
+  }
+
   if (cached.conn) {
     console.log('Using cached MongoDB connection');
     return cached.conn;

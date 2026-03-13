@@ -4,6 +4,7 @@ import PasswordReset from '@/lib/db/models/PasswordReset';
 import { z } from 'zod';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const schema = z.object({
   slug: z.string().min(1),

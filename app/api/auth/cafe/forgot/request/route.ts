@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { sendPasswordOtpEmail } from '@/lib/email/mailer';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const schema = z.object({
   slug: z.string().min(1),

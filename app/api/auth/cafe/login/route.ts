@@ -5,6 +5,8 @@ import Cafe from '@/lib/db/models/Cafe';
 import { generateTokens, setTokenCookies } from '@/lib/auth/jwt';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 const loginSchema = z.object({
   username: z.string().min(1, 'Username is required'),
   password: z.string().min(1, 'Password is required'),

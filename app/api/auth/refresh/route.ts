@@ -4,6 +4,8 @@ import connectDB from '@/lib/db/connect';
 import Admin from '@/lib/db/models/Admin';
 import Cafe from '@/lib/db/models/Cafe';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     const refreshToken = req.cookies.get('refreshToken')?.value || 
