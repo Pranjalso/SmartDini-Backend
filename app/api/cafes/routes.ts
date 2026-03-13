@@ -44,18 +44,18 @@ export const GET = withAuth(async (req: AuthRequest) => {
 
     const cafes = await Cafe.find(query).sort({ createdAt: -1 });
 
-    // Get counts
+    // Get counts - FIX: Handle empty database case
     const totalCafes = await Cafe.countDocuments();
     const activeCafes = await Cafe.countDocuments({ isActive: true });
     const inactiveCafes = await Cafe.countDocuments({ isActive: false });
 
     return NextResponse.json({
       success: true,
-      data: cafes,
+      data: cafes || [], // Always return an array
       stats: {
-        total: totalCafes,
-        active: activeCafes,
-        inactive: inactiveCafes,
+        total: totalCafes || 0,
+        active: activeCafes || 0,
+        inactive: inactiveCafes || 0,
       },
     });
   } catch (error) {
@@ -81,12 +81,14 @@ export const POST = withAuth(async (req: AuthRequest) => {
       email: z.string().email(),
       city: z.string().min(1),
       location: z.string().min(1),
-      subscriptionPlan: z.enum(['Demo (7 Days)', '1 Month', '3 Months', '6 Months', '12 Months', 'Lifetime']),
+      subscriptionPlan: z.enum(['Demo (1 Day)', 'Demo (7 Days)', '1 Month', '3 Months', '6 Months', '12 Months', 'Lifetime']),
       startDate: z.string().min(1),
       endDate: z.string().min(1),
+      taxRate: z.number().min(0).max(100).optional(),
       username: z.string().min(3),
       password: z.string().min(6),
     });
+    
     const parsed = schema.parse(body);
 
     // Generate slug
@@ -112,6 +114,7 @@ export const POST = withAuth(async (req: AuthRequest) => {
         { status: 400 }
       );
     }
+    
     // Also ensure Admin username does not exist to avoid duplicate key error
     const existingAdmin = await Admin.findOne({ username: parsed.username });
     if (existingAdmin) {
@@ -121,20 +124,25 @@ export const POST = withAuth(async (req: AuthRequest) => {
       );
     }
 
-    // Hash password for Cafe record (Admin model will hash via pre-save hook)
+    // Hash password for Cafe record
     const hashedPassword = await bcrypt.hash(parsed.password, 10);
 
+    // Start a session for transaction
     const session = await mongoose.startSession();
+    session.startTransaction();
+    
     let cafe: any = null;
-    await session.withTransaction(async () => {
-      // Create cafe (store hashed password for security)
-      const created = await Cafe.create([{
+    
+    try {
+      // Create cafe
+      const [createdCafe] = await Cafe.create([{
         cafeName: parsed.cafeName,
         ownerName: parsed.ownerName,
         email: parsed.email,
         city: parsed.city,
         location: parsed.location,
         subscriptionPlan: parsed.subscriptionPlan,
+        taxRate: parsed.taxRate ?? 5.0,
         startDate: new Date(parsed.startDate),
         endDate: new Date(parsed.endDate),
         slug,
@@ -142,17 +150,27 @@ export const POST = withAuth(async (req: AuthRequest) => {
         password: hashedPassword,
         isActive: true,
       }], { session });
-      cafe = created?.[0];
+      
+      cafe = createdCafe;
 
-      // Create admin user for cafe (role=cafeadmin) with plain password (model pre-save will hash)
+      // Create admin user for cafe
       await Admin.create([{
         username: parsed.username,
-        password: parsed.password,
+        password: parsed.password, // Will be hashed by pre-save hook
         role: 'cafeadmin',
         cafeSlug: slug,
       }], { session });
-    });
-    session.endSession();
+
+      // Commit the transaction
+      await session.commitTransaction();
+      
+    } catch (transactionError) {
+      // Abort transaction on error
+      await session.abortTransaction();
+      throw transactionError;
+    } finally {
+      session.endSession();
+    }
 
     // Prepare base URL for links
     const baseUrl =
@@ -163,7 +181,7 @@ export const POST = withAuth(async (req: AuthRequest) => {
     const menuUrl = `${baseUrl}/${slug}/menu`;
     const adminUrl = `${baseUrl}/${slug}/admin`;
 
-    // Send welcome email
+    // Send welcome email (non-blocking)
     let emailSent = false;
     try {
       await sendCafeWelcomeEmail({
@@ -179,7 +197,6 @@ export const POST = withAuth(async (req: AuthRequest) => {
       const err = e as Error;
       emailSent = false;
       console.error(`[email] Failed to send welcome email to ${parsed.email}: ${err.message}`);
-      if (err.stack) console.error(err.stack);
     }
 
     return NextResponse.json({
@@ -192,8 +209,10 @@ export const POST = withAuth(async (req: AuthRequest) => {
       },
       emailSent,
     });
+    
   } catch (error) {
     console.error('Error creating cafe:', error);
+    
     // If zod validation fails, return 400
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -201,6 +220,7 @@ export const POST = withAuth(async (req: AuthRequest) => {
         { status: 400 }
       );
     }
+    
     // Handle duplicate key errors from MongoDB
     const anyErr = error as any;
     if (anyErr && anyErr.code === 11000) {
@@ -210,8 +230,17 @@ export const POST = withAuth(async (req: AuthRequest) => {
       else if (pattern.slug) message = 'Cafe with this name already exists';
       return NextResponse.json({ success: false, message }, { status: 409 });
     }
+    
+    // Handle MongoDB connection errors
+    if (error instanceof Error && error.message.includes('MongoDB')) {
+      return NextResponse.json(
+        { success: false, message: 'Database connection error. Please try again.' },
+        { status: 500 }
+      );
+    }
+    
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      { success: false, message: 'Internal server error. Please try again.' },
       { status: 500 }
     );
   }

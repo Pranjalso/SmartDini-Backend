@@ -26,6 +26,8 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
   const [error, setError] = useState<string | null>(null);
   const [tableNumber, setTableNumber] = useState("");
   const [lines, setLines] = useState<Array<{ id: string; name: string; price: number; qty: number; image?: string; description?: string }>>([]);
+  const [orderNumber, setOrderNumber] = useState<number | null>(null);
+  const [taxRate, setTaxRate] = useState(5.0);
 
   // Restore checkout form state and cart lines
   useEffect(() => {
@@ -137,9 +139,26 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
     }
   }, [menupages]);
 
+  // Fetch cafe details for tax rate
+  useEffect(() => {
+    if (!menupages) return;
+    const fetchCafeDetails = async () => {
+      try {
+        const res = await fetch(`/api/cafes/${menupages}/public`);
+        const json = await res.json();
+        if (json?.success && json.data) {
+          setTaxRate(json.data.taxRate ?? 5.0);
+        }
+      } catch (error) {
+        console.error('Error fetching cafe details:', error);
+      }
+    };
+    fetchCafeDetails();
+  }, [menupages]);
+
   // Derived totals
   const subtotal = useMemo(() => lines.reduce((sum, l) => sum + l.price * l.qty, 0), [lines]);
-  const tax = useMemo(() => Math.round(subtotal * 0.05), [subtotal]);
+  const tax = useMemo(() => Math.round(subtotal * (taxRate / 100)), [subtotal, taxRate]);
   const total = useMemo(() => subtotal + tax, [subtotal, tax]);
 
   const handlePayment = async () => {
@@ -179,13 +198,17 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
       if (!res.ok || !json?.success) {
         throw new Error(json?.message || "Failed to place order");
       }
+      const order = json.data;
+      setOrderNumber(order.orderNumber);
       setPaymentComplete(true);
       try {
         window.localStorage.removeItem(`sd:cart:${menupages}`);
       } catch {}
+      
+      // Redirect to order confirmation page after 2 seconds
       setTimeout(() => {
-        router.push(`/${menupages}/menu`);
-      }, 1800);
+        router.push(`/${menupages}/menu/order-confirmation?orderNumber=${order.orderNumber}`);
+      }, 2000);
     } catch (e: any) {
       setError(e?.message || "Failed to process payment");
     } finally {
@@ -201,9 +224,12 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
             <div className="w-20 h-20 bg-green-100 rounded-full mx-auto mb-4 flex items-center justify-center">
               <CheckCircle className="w-10 h-10 text-green-600" />
             </div>
-            <h2 className="text-xl font-bold mb-2">Payment Successful!</h2>
-            <p className="text-sm text-gray-600 mb-4">Your order has been placed</p>
-            <p className="text-xs text-gray-500">Redirecting to order details...</p>
+            <h2 className="text-xl font-bold mb-2">Order Placed Successfully!</h2>
+            <p className="text-sm text-gray-600 mb-2">Your order has been placed</p>
+            {orderNumber && (
+              <p className="text-sm font-semibold text-[#D32F2F] mb-4">Order #{orderNumber}</p>
+            )}
+            <p className="text-xs text-gray-500">Redirecting to order confirmation...</p>
           </div>
         </div>
       </div>
@@ -216,7 +242,7 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
         {/* Header */}
         <header className="sticky top-0 z-10 bg-white border-b">
           <div className="px-4 py-3 flex items-center gap-4">
-            <Link href={`/${menupages}/menu`} className="p-2 hover:bg-gray-100 rounded-full">
+            <Link href={`/${menupages}/menu/checkout`} className="p-2 hover:bg-gray-100 rounded-full">
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <h1 className="text-lg font-semibold">Payment</h1>
@@ -281,7 +307,7 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
                 </div>
               </label>
 
-              {/* Cash Only Option - Replaced COD */}
+              {/* Cash Only Option */}
               <label className={`block border rounded-xl p-4 cursor-pointer transition-all ${
                 paymentMethod === 'cash' ? 'border-[#D32F2F] bg-[#D32F2F]/5' : 'border-gray-200 bg-white'
               }`}>
@@ -342,10 +368,9 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
               <div className="flex items-start gap-3">
                 <Wallet className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-semibold text-amber-800 mb-1">Cash Only</h3>
+                  <h3 className="font-semibold text-amber-800 mb-1">Cash Payment</h3>
                   <p className="text-xs text-amber-700">
-                    Please pay ₹{total} in cash at the counter or to the delivery person. 
-                    Exact change is appreciated.
+                    Please pay ₹{total} in cash at the counter. Your order will be prepared after payment confirmation.
                   </p>
                 </div>
               </div>
@@ -364,7 +389,7 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
                 Processing...
               </span>
             ) : (
-              `Pay ₹${total}`
+              `Place Order · ₹${total}`
             )}
           </button>
 
@@ -374,7 +399,7 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
 
           {/* Security Note */}
           <p className="text-xs text-center text-gray-500">
-            🔒 Your payment information is secure
+            🔒 Your information is secure
           </p>
         </div>
       </div>

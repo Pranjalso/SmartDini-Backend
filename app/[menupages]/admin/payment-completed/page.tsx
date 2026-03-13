@@ -1,27 +1,28 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useSearchParams } from "next/navigation";
-import { Package, Clock, Armchair, Wallet, CreditCard, IndianRupee, ChevronDown, Search, Calendar } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { Package, Clock, Armchair, Wallet, CreditCard, IndianRupee, ChevronDown, Search, Calendar, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 // ─── Types ───
 type OrderItem = {
-  id: number;
+  menuItemId: string;
   name: string;
   price: number;
+  quantity: number;
 };
 
 type PaymentMethod = "cash" | "upi";
 
 type Order = {
-  id: string;
+  _id: string;
   orderNumber: number;
-  time: string;
-  date: string;
-  table: string;
+  createdAt: string;
+  tableNumber: string;
   total: number;
   paymentMethod: PaymentMethod;
-  paymentStatus: "completed" | "failed" | "refunded";
+  paymentStatus: "pending" | "completed" | "failed" | "refunded";
   items: OrderItem[];
 };
 
@@ -31,461 +32,6 @@ function getTodayDateString() {
   return today.toISOString().split('T')[0];
 }
 
-const TODAY = getTodayDateString();
-const YESTERDAY = (() => {
-  const date = new Date();
-  date.setDate(date.getDate() - 1);
-  return date.toISOString().split('T')[0];
-})();
-
-// ─── Enhanced Seed Data with 15+ orders for today ───
-const COMPLETED_ORDERS: Order[] = [
-  // TODAY'S ORDERS - 15+ orders for today
-  {
-    id: "ORD001",
-    orderNumber: 1245,
-    time: "09:45 PM",
-    date: TODAY,
-    table: "Table 008",
-    total: 1247,
-    paymentMethod: "upi",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Chicken Burger", price: 199 },
-      { id: 2, name: "French Fries", price: 149 },
-      { id: 3, name: "Cold Coffee", price: 119 },
-      { id: 1, name: "Chicken Burger", price: 199 },
-      { id: 2, name: "Chicken Burger", price: 199 },
-      { id: 4, name: "Brownie", price: 149 },
-      { id: 1, name: "Cold Coffee", price: 119 },
-      { id: 4, name: "Chicken Burger", price: 199 },
-    ],
-  },
-  {
-    id: "ORD002",
-    orderNumber: 1244,
-    time: "09:30 PM",
-    date: TODAY,
-    table: "Table 003",
-    total: 895,
-    paymentMethod: "cash",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Margherita Pizza", price: 299 },
-      { id: 2, name: "Garlic Bread", price: 149 },
-      { id: 3, name: "Pasta Alfredo", price: 249 },
-      { id: 4, name: "Soft Drink", price: 99 },
-    ],
-  },
-  {
-    id: "ORD003",
-    orderNumber: 1243,
-    time: "09:15 PM",
-    date: TODAY,
-    table: "Table 012",
-    total: 567,
-    paymentMethod: "upi",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Veg Burger", price: 149 },
-      { id: 2, name: "French Fries", price: 149 },
-      { id: 3, name: "Mango Shake", price: 179 },
-    ],
-  },
-  {
-    id: "ORD004",
-    orderNumber: 1242,
-    time: "08:50 PM",
-    date: TODAY,
-    table: "Table 005",
-    total: 1899,
-    paymentMethod: "upi",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Farmhouse Pizza", price: 399 },
-      { id: 2, name: "Chicken Wings", price: 299 },
-      { id: 3, name: "Caesar Salad", price: 249 },
-      { id: 4, name: "Chocolate Shake", price: 179 },
-      { id: 5, name: "Garlic Bread", price: 149 },
-      { id: 6, name: "Brownie", price: 149 },
-    ],
-  },
-  {
-    id: "ORD005",
-    orderNumber: 1241,
-    time: "08:30 PM",
-    date: TODAY,
-    table: "Table 002",
-    total: 349,
-    paymentMethod: "cash",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Masala Maggie", price: 89 },
-      { id: 2, name: "Cold Coffee", price: 119 },
-      { id: 3, name: "French Fries", price: 149 },
-    ],
-  },
-  {
-    id: "ORD006",
-    orderNumber: 1240,
-    time: "08:15 PM",
-    date: TODAY,
-    table: "Table 010",
-    total: 1299,
-    paymentMethod: "upi",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Paneer Tikka Pizza", price: 349 },
-      { id: 2, name: "Chicken Burger", price: 199 },
-      { id: 3, name: "Chicken Burger", price: 199 },
-      { id: 4, name: "French Fries", price: 149 },
-      { id: 5, name: "Cold Coffee", price: 119 },
-      { id: 6, name: "Brownie", price: 149 },
-    ],
-  },
-  {
-    id: "ORD007",
-    orderNumber: 1239,
-    time: "08:00 PM",
-    date: TODAY,
-    table: "Table 015",
-    total: 799,
-    paymentMethod: "cash",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Chicken Burger", price: 199 },
-      { id: 2, name: "Chicken Burger", price: 199 },
-      { id: 3, name: "French Fries", price: 149 },
-      { id: 4, name: "Cold Coffee", price: 119 },
-    ],
-  },
-  {
-    id: "ORD008",
-    orderNumber: 1238,
-    time: "07:45 PM",
-    date: TODAY,
-    table: "Table 007",
-    total: 2150,
-    paymentMethod: "upi",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Family Pizza", price: 599 },
-      { id: 2, name: "Chicken Wings", price: 299 },
-      { id: 3, name: "Garlic Bread", price: 149 },
-      { id: 4, name: "Pasta Alfredo", price: 249 },
-      { id: 5, name: "Brownie", price: 149 },
-      { id: 6, name: "Cold Coffee", price: 119 },
-      { id: 7, name: "Cold Coffee", price: 119 },
-    ],
-  },
-  {
-    id: "ORD009",
-    orderNumber: 1237,
-    time: "07:30 PM",
-    date: TODAY,
-    table: "Table 001",
-    total: 675,
-    paymentMethod: "upi",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Veg Pizza", price: 299 },
-      { id: 2, name: "Garlic Bread", price: 149 },
-      { id: 3, name: "Cold Coffee", price: 119 },
-    ],
-  },
-  {
-    id: "ORD010",
-    orderNumber: 1236,
-    time: "07:15 PM",
-    date: TODAY,
-    table: "Table 011",
-    total: 445,
-    paymentMethod: "cash",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Chicken Burger", price: 199 },
-      { id: 2, name: "French Fries", price: 149 },
-    ],
-  },
-  {
-    id: "ORD011",
-    orderNumber: 1235,
-    time: "07:00 PM",
-    date: TODAY,
-    table: "Table 009",
-    total: 988,
-    paymentMethod: "upi",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Margherita Pizza", price: 299 },
-      { id: 2, name: "Pasta Alfredo", price: 249 },
-      { id: 3, name: "Garlic Bread", price: 149 },
-      { id: 4, name: "Cold Coffee", price: 119 },
-    ],
-  },
-  {
-    id: "ORD012",
-    orderNumber: 1234,
-    time: "06:45 PM",
-    date: TODAY,
-    table: "Table 004",
-    total: 1599,
-    paymentMethod: "upi",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Chicken Wings", price: 299 },
-      { id: 2, name: "Chicken Wings", price: 299 },
-      { id: 3, name: "Farmhouse Pizza", price: 399 },
-      { id: 4, name: "Brownie", price: 149 },
-    ],
-  },
-  {
-    id: "ORD013",
-    orderNumber: 1233,
-    time: "06:30 PM",
-    date: TODAY,
-    table: "Table 014",
-    total: 567,
-    paymentMethod: "cash",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Veg Burger", price: 149 },
-      { id: 2, name: "Veg Burger", price: 149 },
-      { id: 3, name: "French Fries", price: 149 },
-    ],
-  },
-  {
-    id: "ORD014",
-    orderNumber: 1232,
-    time: "06:15 PM",
-    date: TODAY,
-    table: "Table 006",
-    total: 1199,
-    paymentMethod: "upi",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Paneer Tikka Pizza", price: 349 },
-      { id: 2, name: "Garlic Bread", price: 149 },
-      { id: 3, name: "Pasta Alfredo", price: 249 },
-      { id: 4, name: "Cold Coffee", price: 119 },
-    ],
-  },
-  {
-    id: "ORD015",
-    orderNumber: 1231,
-    time: "06:00 PM",
-    date: TODAY,
-    table: "Table 013",
-    total: 895,
-    paymentMethod: "cash",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Chicken Burger", price: 199 },
-      { id: 2, name: "Chicken Burger", price: 199 },
-      { id: 3, name: "French Fries", price: 149 },
-      { id: 4, name: "Mango Shake", price: 179 },
-    ],
-  },
-  {
-    id: "ORD016",
-    orderNumber: 1230,
-    time: "05:45 PM",
-    date: TODAY,
-    table: "Table 016",
-    total: 1349,
-    paymentMethod: "upi",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Family Pizza", price: 599 },
-      { id: 2, name: "Chicken Wings", price: 299 },
-      { id: 3, name: "Garlic Bread", price: 149 },
-      { id: 4, name: "Brownie", price: 149 },
-    ],
-  },
-  {
-    id: "ORD017",
-    orderNumber: 1229,
-    time: "05:30 PM",
-    date: TODAY,
-    table: "Table 018",
-    total: 799,
-    paymentMethod: "upi",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Chicken Burger", price: 199 },
-      { id: 2, name: "Chicken Burger", price: 199 },
-      { id: 3, name: "French Fries", price: 149 },
-      { id: 4, name: "Cold Coffee", price: 119 },
-    ],
-  },
-  {
-    id: "ORD018",
-    orderNumber: 1228,
-    time: "05:15 PM",
-    date: TODAY,
-    table: "Table 019",
-    total: 988,
-    paymentMethod: "cash",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Margherita Pizza", price: 299 },
-      { id: 2, name: "Pasta Alfredo", price: 249 },
-      { id: 3, name: "Garlic Bread", price: 149 },
-      { id: 4, name: "Cold Coffee", price: 119 },
-    ],
-  },
-  {
-    id: "ORD019",
-    orderNumber: 1227,
-    time: "05:00 PM",
-    date: TODAY,
-    table: "Table 020",
-    total: 567,
-    paymentMethod: "upi",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Veg Burger", price: 149 },
-      { id: 2, name: "French Fries", price: 149 },
-      { id: 3, name: "Mango Shake", price: 179 },
-    ],
-  },
-  {
-    id: "ORD020",
-    orderNumber: 1226,
-    time: "04:45 PM",
-    date: TODAY,
-    table: "Table 021",
-    total: 445,
-    paymentMethod: "upi",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Chicken Burger", price: 199 },
-      { id: 2, name: "French Fries", price: 149 },
-    ],
-  },
-
-  // YESTERDAY'S ORDERS - for testing other filters
-  {
-    id: "ORD021",
-    orderNumber: 1225,
-    time: "09:30 PM",
-    date: YESTERDAY,
-    table: "Table 008",
-    total: 1247,
-    paymentMethod: "upi",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Chicken Burger", price: 199 },
-      { id: 2, name: "French Fries", price: 149 },
-      { id: 3, name: "Cold Coffee", price: 119 },
-    ],
-  },
-  {
-    id: "ORD022",
-    orderNumber: 1224,
-    time: "08:45 PM",
-    date: YESTERDAY,
-    table: "Table 012",
-    total: 895,
-    paymentMethod: "cash",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Margherita Pizza", price: 299 },
-      { id: 2, name: "Garlic Bread", price: 149 },
-    ],
-  },
-  {
-    id: "ORD023",
-    orderNumber: 1223,
-    time: "07:30 PM",
-    date: YESTERDAY,
-    table: "Table 005",
-    total: 567,
-    paymentMethod: "upi",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Veg Burger", price: 149 },
-      { id: 2, name: "French Fries", price: 149 },
-    ],
-  },
-
-  // LAST 7 DAYS ORDERS
-  {
-    id: "ORD024",
-    orderNumber: 1222,
-    time: "08:00 PM",
-    date: (() => {
-      const date = new Date();
-      date.setDate(date.getDate() - 3);
-      return date.toISOString().split('T')[0];
-    })(),
-    table: "Table 015",
-    total: 1299,
-    paymentMethod: "upi",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Paneer Tikka Pizza", price: 349 },
-      { id: 2, name: "Chicken Burger", price: 199 },
-    ],
-  },
-  {
-    id: "ORD025",
-    orderNumber: 1221,
-    time: "07:15 PM",
-    date: (() => {
-      const date = new Date();
-      date.setDate(date.getDate() - 5);
-      return date.toISOString().split('T')[0];
-    })(),
-    table: "Table 010",
-    total: 799,
-    paymentMethod: "cash",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Chicken Burger", price: 199 },
-      { id: 2, name: "French Fries", price: 149 },
-    ],
-  },
-
-  // LAST 30 DAYS ORDERS
-  {
-    id: "ORD026",
-    orderNumber: 1220,
-    time: "07:30 PM",
-    date: (() => {
-      const date = new Date();
-      date.setDate(date.getDate() - 15);
-      return date.toISOString().split('T')[0];
-    })(),
-    table: "Table 020",
-    total: 988,
-    paymentMethod: "upi",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Margherita Pizza", price: 299 },
-      { id: 2, name: "Pasta Alfredo", price: 249 },
-    ],
-  },
-  {
-    id: "ORD027",
-    orderNumber: 1219,
-    time: "08:45 PM",
-    date: (() => {
-      const date = new Date();
-      date.setDate(date.getDate() - 25);
-      return date.toISOString().split('T')[0];
-    })(),
-    table: "Table 025",
-    total: 1599,
-    paymentMethod: "upi",
-    paymentStatus: "completed",
-    items: [
-      { id: 1, name: "Chicken Wings", price: 299 },
-      { id: 2, name: "Farmhouse Pizza", price: 399 },
-    ],
-  },
-];
-
 // Date filter options
 type DateFilterOption = "today" | "yesterday" | "7d" | "30d";
 
@@ -493,20 +39,19 @@ type DateFilterOption = "today" | "yesterday" | "7d" | "30d";
 function OrderCard({ order }: { order: Order }) {
   const [expanded, setExpanded] = useState(false);
 
-  // Group items for display
-  const itemMap = new Map();
-  order.items.forEach(item => {
-    const key = `${item.id}-${item.name}-${item.price}`;
-    if (itemMap.has(key)) {
-      itemMap.set(key, { ...item, quantity: itemMap.get(key).quantity + 1 });
-    } else {
-      itemMap.set(key, { ...item, quantity: 1 });
-    }
-  });
-  
-  const uniqueItems = Array.from(itemMap.values());
-  const totalQuantity = order.items.length;
-  const remainingItems = uniqueItems.length - 2;
+  const totalQuantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
+  const showExpandButton = order.items.length > 3;
+  const remainingItems = order.items.length - 2;
+
+  const formatTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString();
+  };
 
   return (
     <div className="bg-[#F3F4F6] rounded-xl sm:rounded-2xl p-3 sm:p-4 mb-3 sm:mb-4 shadow-sm hover:shadow-md transition-shadow">
@@ -531,12 +76,12 @@ function OrderCard({ order }: { order: Order }) {
             
             <div className="flex items-center gap-1 text-[9px] sm:text-xs text-gray-500 font-medium mt-0.5 sm:mt-1 whitespace-nowrap">
               <Clock size={10} className="flex-shrink-0" />
-              <span className="flex-shrink-0">{order.time}</span>
+              <span className="flex-shrink-0">{formatTime(order.createdAt)}</span>
               <span className="text-gray-300 flex-shrink-0">•</span>
-              <span className="flex-shrink-0">{order.date}</span>
+              <span className="flex-shrink-0">{formatDate(order.createdAt)}</span>
               <span className="text-gray-300 flex-shrink-0">•</span>
               <Armchair size={10} className="flex-shrink-0" />
-              <span className="flex-shrink-0 truncate max-w-[70px] sm:max-w-full">{order.table}</span>
+              <span className="flex-shrink-0 truncate max-w-[70px] sm:max-w-full">{order.tableNumber}</span>
             </div>
           </div>
 
@@ -556,7 +101,7 @@ function OrderCard({ order }: { order: Order }) {
               {order.paymentMethod === 'upi' ? 'UPI' : 'Cash'}
             </div>
             <span className="font-extrabold text-gray-900 text-xs sm:text-lg">
-              ₹{order.total}
+              ₹{order.total.toFixed(2)}
             </span>
           </div>
         </div>
@@ -566,22 +111,24 @@ function OrderCard({ order }: { order: Order }) {
       <div className="bg-white rounded-lg sm:rounded-xl p-2 sm:p-3 mb-1 sm:mb-2">
         <div className="flex items-center justify-between mb-1 sm:mb-2">
           <span className="text-[9px] sm:text-xs font-semibold text-gray-500">
-            {uniqueItems.length} items · {totalQuantity} quantity
+            {order.items.length} items · {totalQuantity} quantity
           </span>
-          <button 
-            onClick={() => setExpanded(!expanded)}
-            className="text-[9px] sm:text-xs font-medium text-[#D92632] hover:underline flex items-center gap-0.5 sm:gap-1"
-          >
-            {expanded ? 'Show less' : 'View details'}
-            <ChevronDown size={10} className={`transform transition-transform ${expanded ? 'rotate-180' : ''}`} />
-          </button>
+          {showExpandButton && (
+            <button 
+              onClick={() => setExpanded(!expanded)}
+              className="text-[9px] sm:text-xs font-medium text-[#D92632] hover:underline flex items-center gap-0.5 sm:gap-1"
+            >
+              {expanded ? 'Show less' : 'View details'}
+              <ChevronDown size={10} className={`transform transition-transform ${expanded ? 'rotate-180' : ''}`} />
+            </button>
+          )}
         </div>
         
         {/* Collapsible Items List */}
-        <div className={`space-y-1 overflow-hidden transition-all ${expanded ? 'max-h-96' : 'max-h-12 sm:max-h-14'}`}>
-          {expanded ? (
-            // Full detailed view
-            uniqueItems.map((item: any, idx) => (
+        <div className={`space-y-1 overflow-hidden transition-all ${(!showExpandButton || expanded) ? 'max-h-96' : 'max-h-12 sm:max-h-14'}`}>
+          {(!showExpandButton || expanded) ? (
+            // Full detailed view (or all items if 3 or less)
+            order.items.map((item: any, idx) => (
               <div key={idx} className="flex items-center justify-between text-[9px] sm:text-xs py-0.5 sm:py-1 border-b border-gray-100 last:border-0">
                 <div className="flex items-center gap-1 sm:gap-2 min-w-0 flex-1">
                   <span className="w-4 h-4 sm:w-5 sm:h-5 rounded bg-[#FEE2E2] text-[#D92632] text-[7px] sm:text-[10px] font-bold flex items-center justify-center flex-shrink-0">
@@ -589,13 +136,13 @@ function OrderCard({ order }: { order: Order }) {
                   </span>
                   <span className="font-medium text-gray-800 truncate">{item.name}</span>
                 </div>
-                <span className="font-semibold text-gray-600 whitespace-nowrap ml-1 sm:ml-2">₹{item.price * item.quantity}</span>
+                <span className="font-semibold text-gray-600 whitespace-nowrap ml-1 sm:ml-2">₹{(item.price * item.quantity).toFixed(2)}</span>
               </div>
             ))
           ) : (
-            // Compact view - first 3 items
+            // Compact view - first 2 items
             <>
-              {uniqueItems.slice(0, 2).map((item: any, idx) => (
+              {order.items.slice(0, 2).map((item: any, idx) => (
                 <div key={idx} className="flex items-center justify-between text-[8px] sm:text-xs">
                   <div className="flex items-center gap-1 sm:gap-2 min-w-0 flex-1">
                     <span className="w-3 h-3 sm:w-4 sm:h-4 rounded bg-[#FEE2E2] text-[#D92632] text-[6px] sm:text-[8px] font-bold flex items-center justify-center flex-shrink-0">
@@ -603,7 +150,7 @@ function OrderCard({ order }: { order: Order }) {
                     </span>
                     <span className="text-gray-700 truncate">{item.name}</span>
                   </div>
-                  <span className="text-gray-600 whitespace-nowrap ml-1">₹{item.price * item.quantity}</span>
+                  <span className="text-gray-600 whitespace-nowrap ml-1">₹{(item.price * item.quantity).toFixed(2)}</span>
                 </div>
               ))}
               {remainingItems > 0 && (
@@ -621,53 +168,91 @@ function OrderCard({ order }: { order: Order }) {
 
 // ─── Main Page Component ───
 export default function PaymentCompletedPage() {
+  const params = useParams();
+  const slug = params?.menupages as string;
   const searchParams = useSearchParams();
-  const orderId = searchParams.get('orderId');
+  const orderIdParam = searchParams.get('orderId');
+  const { toast } = useToast();
   
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilterOption>("today");
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getTodayDateString());
-  const [orders, setOrders] = useState(COMPLETED_ORDERS);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Check for order from sessionStorage when component mounts
-  useEffect(() => {
-    const completedOrder = sessionStorage.getItem('completedOrder');
-    if (completedOrder) {
-      try {
-        const order = JSON.parse(completedOrder);
-        // Convert the order to match the Order type in this page
-        const newOrder: Order = {
-          id: order.id,
-          orderNumber: order.number,
-          time: order.time,
-          date: TODAY,
-          table: order.table,
-          total: order.total,
-          paymentMethod: order.paymentMethod === 'upi' ? 'upi' : 'cash',
-          paymentStatus: "completed",
-          items: order.items
-        };
-        
-        // Add to orders list if not already there
-        setOrders(prev => {
-          // Check if order already exists
-          const exists = prev.some(o => o.id === newOrder.id);
-          if (!exists) {
-            return [newOrder, ...prev];
-          }
-          return prev;
-        });
-        
-        // Clear from sessionStorage
-        sessionStorage.removeItem('completedOrder');
-      } catch (error) {
-        console.error('Error parsing completed order:', error);
+  const fetchOrders = useCallback(async () => {
+    if (!slug) return;
+    try {
+      let url = `/api/orders/${slug}?paymentStatus=completed`;
+      
+      const today = getTodayDateString();
+      if (selectedDate !== today) {
+        url += `&date=${selectedDate}`;
+      } else {
+        const date = new Date();
+        if (dateFilter === "yesterday") {
+          date.setDate(date.getDate() - 1);
+          url += `&date=${date.toISOString().split('T')[0]}`;
+        } else if (dateFilter === "7d") {
+          const start = new Date();
+          start.setDate(start.getDate() - 7);
+          url += `&startDate=${start.toISOString()}&endDate=${new Date().toISOString()}`;
+        } else if (dateFilter === "30d") {
+          const start = new Date();
+          start.setDate(start.getDate() - 30);
+          url += `&startDate=${start.toISOString()}&endDate=${new Date().toISOString()}`;
+        } else {
+          url += `&date=${today}`;
+        }
       }
+
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.success) {
+        setOrders(data.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch orders:", err);
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [slug, selectedDate, dateFilter]);
+
+  // Handle order transition if orderIdParam is present
+  useEffect(() => {
+    const markAsPaid = async () => {
+      if (orderIdParam && slug) {
+        try {
+          const res = await fetch(`/api/orders/${slug}?id=${orderIdParam}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paymentStatus: "completed" }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            toast({
+              title: "Payment Confirmed",
+              description: `Order #${data.data.orderNumber} marked as completed.`,
+            });
+            fetchOrders();
+          }
+        } catch (err) {
+          console.error("Failed to mark order as paid:", err);
+        }
+      }
+    };
+    markAsPaid();
+  }, [orderIdParam, slug, fetchOrders, toast]);
+
+  useEffect(() => {
+    fetchOrders();
+    // Poll for completed payments every 60 seconds
+    const interval = setInterval(fetchOrders, 60000);
+    return () => clearInterval(interval);
+  }, [fetchOrders]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -683,77 +268,20 @@ export default function PaymentCompletedPage() {
     };
   }, []);
 
-  // Get today's date in YYYY-MM-DD format
-  function getTodayDate() {
-    return getTodayDateString();
-  }
-
-  // Get yesterday's date
-  const getYesterdayDate = () => {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    return yesterday.toISOString().split('T')[0];
-  };
-
-  // Get date from X days ago
-  const getDaysAgoDate = (days: number) => {
-    const date = new Date();
-    date.setDate(date.getDate() - days);
-    return date.toISOString().split('T')[0];
-  };
-
   // Handle date picker change
   const handleDatePickerChange = (date: string) => {
     setSelectedDate(date);
     setDateFilter("today");
   };
 
-  // Filter orders based on date filter and search
-  const filterOrdersByDate = () => {
-    const today = getTodayDate();
-    const yesterday = getYesterdayDate();
-    const sevenDaysAgo = getDaysAgoDate(7);
-    const thirtyDaysAgo = getDaysAgoDate(30);
+  // Filter orders based on search
+  const filteredOrders = orders.filter(order => {
+    return searchTerm === "" || 
+      order.orderNumber.toString().includes(searchTerm) ||
+      order.tableNumber.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
-    return orders.filter(order => {
-      // First apply date filter
-      let dateMatch = true;
-      
-      // If date picker is used (selectedDate is not today), use that date
-      if (selectedDate !== today) {
-        dateMatch = order.date === selectedDate;
-      } else {
-        // Otherwise use the dropdown filter
-        switch (dateFilter) {
-          case "today":
-            dateMatch = order.date === today;
-            break;
-          case "yesterday":
-            dateMatch = order.date === yesterday;
-            break;
-          case "7d":
-            dateMatch = order.date >= sevenDaysAgo && order.date <= today;
-            break;
-          case "30d":
-            dateMatch = order.date >= thirtyDaysAgo && order.date <= today;
-            break;
-          default:
-            dateMatch = true;
-        }
-      }
-
-      // Then apply search filter
-      const searchMatch = searchTerm === "" || 
-        order.orderNumber.toString().includes(searchTerm) ||
-        order.table.toLowerCase().includes(searchTerm.toLowerCase());
-
-      return dateMatch && searchMatch;
-    });
-  };
-
-  const filteredOrders = filterOrdersByDate();
-
-  // Calculate revenue statistics for filtered orders
+  // Calculate revenue statistics
   const totalRevenue = filteredOrders.reduce((sum, order) => sum + order.total, 0);
   const cashPayments = filteredOrders
     .filter(order => order.paymentMethod === 'cash')
@@ -764,14 +292,10 @@ export default function PaymentCompletedPage() {
 
   // Get display text for date filter
   const getDateFilterDisplay = () => {
-    const today = getTodayDate();
-    
-    // If date picker is used (selectedDate is not today)
+    const today = getTodayDateString();
     if (selectedDate !== today) {
-      return formatDateForDisplay(selectedDate);
+      return new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
-    
-    // Otherwise use dropdown filter
     switch (dateFilter) {
       case "today": return "Today";
       case "yesterday": return "Yesterday";
@@ -781,16 +305,10 @@ export default function PaymentCompletedPage() {
     }
   };
 
-  const formatDateForDisplay = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
   const handleDateFilterSelect = (option: DateFilterOption) => {
     setDateFilter(option);
     setShowDropdown(false);
-    // Reset date picker to today when using dropdown filters
-    setSelectedDate(getTodayDate());
+    setSelectedDate(getTodayDateString());
   };
 
   return (
@@ -798,9 +316,12 @@ export default function PaymentCompletedPage() {
       
       {/* ─── Page Header ─── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-6 sm:mb-8">
-        <h2 className="text-lg sm:text-xl font-extrabold text-gray-900">
-          Payment Completed
-        </h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg sm:text-xl font-extrabold text-gray-900">
+            Payment Completed
+          </h2>
+          {loading && <Loader2 size={16} className="animate-spin text-gray-400" />}
+        </div>
         
         {/* Filter Section - Date Picker + Dropdown in same row */}
         <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -813,7 +334,7 @@ export default function PaymentCompletedPage() {
               type="date"
               value={selectedDate}
               onChange={(e) => handleDatePickerChange(e.target.value)}
-              max={getTodayDate()}
+              max={getTodayDateString()}
               className="w-full sm:w-[150px] lg:w-[160px] pl-8 sm:pl-10 pr-2 py-1.5 sm:py-2 bg-[#F9FAFB] border border-gray-200 rounded-lg text-[10px] sm:text-xs focus:outline-none focus:border-[#D92632] focus:ring-1 focus:ring-[#D92632]"
             />
           </div>
@@ -834,7 +355,7 @@ export default function PaymentCompletedPage() {
                 <div className="py-0.5 sm:py-1">
                   <button
                     onClick={() => handleDateFilterSelect("today")}
-                    className={`w-full text-left px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs hover:bg-[#FFEFEF] transition-colors ${dateFilter === 'today' && selectedDate === getTodayDate() ? 'bg-[#FFEFEF] text-[#D92632] font-medium' : 'text-gray-700'}`}
+                    className={`w-full text-left px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs hover:bg-[#FFEFEF] transition-colors ${dateFilter === 'today' && selectedDate === getTodayDateString() ? 'bg-[#FFEFEF] text-[#D92632] font-medium' : 'text-gray-700'}`}
                   >
                     Today
                   </button>
@@ -873,7 +394,7 @@ export default function PaymentCompletedPage() {
               <IndianRupee size={16} className="text-white" strokeWidth={2.5} />
             </div>
           </div>
-          <p className="text-xl sm:text-3xl font-extrabold">₹{totalRevenue}</p>
+          <p className="text-xl sm:text-3xl font-extrabold">₹{totalRevenue.toFixed(2)}</p>
           <p className="text-[10px] sm:text-xs opacity-75 mt-0.5 sm:mt-1">from {filteredOrders.length} completed orders</p>
         </div>
 
@@ -885,7 +406,7 @@ export default function PaymentCompletedPage() {
               <Wallet size={16} className="text-amber-600" strokeWidth={2.5} />
             </div>
           </div>
-          <p className="text-xl sm:text-3xl font-extrabold text-gray-900">₹{cashPayments}</p>
+          <p className="text-xl sm:text-3xl font-extrabold text-gray-900">₹{cashPayments.toFixed(2)}</p>
           <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">
             {filteredOrders.filter(o => o.paymentMethod === 'cash').length} cash orders
           </p>
@@ -899,7 +420,7 @@ export default function PaymentCompletedPage() {
               <CreditCard size={16} className="text-purple-600" strokeWidth={2.5} />
             </div>
           </div>
-          <p className="text-xl sm:text-3xl font-extrabold text-gray-900">₹{upiPayments}</p>
+          <p className="text-xl sm:text-3xl font-extrabold text-gray-900">₹{upiPayments.toFixed(2)}</p>
           <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">
             {filteredOrders.filter(o => o.paymentMethod === 'upi').length} UPI orders
           </p>
@@ -931,7 +452,12 @@ export default function PaymentCompletedPage() {
           </span>
         </div>
 
-        {filteredOrders.length === 0 ? (
+        {loading && filteredOrders.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 sm:py-20 text-gray-400 bg-[#F9FAFB] rounded-xl sm:rounded-2xl">
+            <Loader2 size={32} className="mb-2 sm:mb-4 animate-spin opacity-20" />
+            <p className="text-xs sm:text-sm font-medium">Loading orders...</p>
+          </div>
+        ) : filteredOrders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 sm:py-20 text-gray-400 bg-[#F9FAFB] rounded-xl sm:rounded-2xl">
             <Package size={32} className="mb-2 sm:mb-4 opacity-20" />
             <p className="text-xs sm:text-sm font-medium">No completed orders found</p>
@@ -939,7 +465,7 @@ export default function PaymentCompletedPage() {
         ) : (
           <div className="space-y-3 sm:space-y-4">
             {filteredOrders.map((order) => (
-              <OrderCard key={order.id} order={order} />
+              <OrderCard key={order._id} order={order} />
             ))}
           </div>
         )}

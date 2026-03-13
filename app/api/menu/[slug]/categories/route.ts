@@ -1,36 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/connect';
 import MenuItem from '@/lib/db/models/MenuItem';
+import { withCafeAccess, AuthRequest } from '@/lib/auth/middleware';
+import { getMenuCategories } from '@/lib/db/menu';
 
-export const GET = async (
+// Aggregate distinct categories for a cafe (Public)
+export async function GET(
   req: NextRequest,
   { params }: { params: { slug: string } }
-) => {
+) {
   try {
-    await connectDB();
-    // Aggregate distinct categories with a representative image
-    const results = await (MenuItem as any).aggregate([
-      { $match: { cafeSlug: params.slug } },
-      { $sort: { category: 1, name: 1 } },
-      {
-        $group: {
-          _id: '$category',
-          image: { $first: '$imageUrl' },
-        },
-      },
-      { $project: { _id: 0, name: '$_id', image: 1 } },
-      { $sort: { name: 1 } },
-    ]);
+    const { slug } = await params;
+    const data = await getMenuCategories(slug);
 
     return NextResponse.json({
       success: true,
-      data: results,
+      data,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching categories:', error);
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      { success: false, message: error.message || 'Internal server error' },
       { status: 500 }
     );
   }
-};
+}

@@ -72,10 +72,12 @@ export default function ManageMenuPage() {
         const catsJson = await catsRes.json();
         const itemsJson = await itemsRes.json();
         if (catsJson?.success && Array.isArray(catsJson.data)) {
-          const cats = catsJson.data.map((c: any) => c.name).filter(Boolean);
-          setCategories(cats.length ? cats : DEFAULT_CATEGORIES);
+          const fetchedCats = catsJson.data.map((c: any) => c.name).filter(Boolean);
+          // Merge fetched categories with DEFAULT_CATEGORIES and ensure uniqueness, then sort
+          const combinedCats = Array.from(new Set([...DEFAULT_CATEGORIES, ...fetchedCats])).sort();
+          setCategories(combinedCats);
         } else {
-          setCategories(DEFAULT_CATEGORIES);
+          setCategories([...DEFAULT_CATEGORIES].sort());
         }
         if (itemsJson?.success && Array.isArray(itemsJson.data)) {
           const items: MenuItem[] = itemsJson.data.map((it: any) => ({
@@ -122,9 +124,16 @@ export default function ManageMenuPage() {
   };
 
   const handleAddCategory = () => {
-    if (newCategory.trim() && !categories.includes(newCategory.trim())) {
-      setCategories([...categories, newCategory.trim()]);
-      setCategory(newCategory.trim());
+    const trimmed = newCategory.trim();
+    if (trimmed && !categories.some(c => c.toLowerCase() === trimmed.toLowerCase())) {
+      setCategories(prev => [...prev, trimmed].sort());
+      setCategory(trimmed);
+      setNewCategory("");
+      setShowAddCategory(false);
+    } else if (trimmed) {
+      // If already exists, just select it
+      const existing = categories.find(c => c.toLowerCase() === trimmed.toLowerCase());
+      if (existing) setCategory(existing);
       setNewCategory("");
       setShowAddCategory(false);
     }
@@ -195,7 +204,7 @@ export default function ManageMenuPage() {
         return next;
       });
       if (!categories.includes(newItem.category)) {
-        setCategories(prev => [...prev, newItem.category]);
+        setCategories(prev => [...prev, newItem.category].sort());
       }
       setItemName("");
       setPrice("");
@@ -208,10 +217,6 @@ export default function ManageMenuPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const deleteItem = (id: number) => {
-    return;
   };
 
   const startEdit = (id: string) => {
@@ -228,10 +233,6 @@ export default function ManageMenuPage() {
 
   const cancelEdit = (id: string) => {
     setMenu(menu.map(m => m.id === id ? { ...m, editing: false } : m));
-  };
-
-  const saveEdit = (id: string) => {
-    return;
   };
 
   const updateEditField = (id: string, field: string, value: string | number) => {

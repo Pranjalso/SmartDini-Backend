@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { ClipboardList, Clock, CheckCircle, ChevronDown, Calendar } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useParams } from "next/navigation";
+import { ClipboardList, Clock, CheckCircle, ChevronDown, Calendar, Loader2, Bell } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -10,66 +11,22 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Label,
 } from "recharts";
 
-// Sample data for different time periods
-const generateData = (period: string, customDate?: Date) => {
-  // This is sample data - in a real app, you'd fetch based on the date range
-  const baseData = [
-    { name: "Item 1", orders: 18 },
-    { name: "Item 2", orders: 25 },
-    { name: "Item 3", orders: 22 },
-    { name: "Item 4", orders: 34 },
-    { name: "Item 5", orders: 36 },
-  ];
-
-  // Modify data based on period to simulate different views
-  if (period === "7d") {
-    return baseData.map(item => ({ ...item, orders: Math.floor(item.orders * 2.5) }));
-  } else if (period === "30d") {
-    return baseData.map(item => ({ ...item, orders: Math.floor(item.orders * 5) }));
-  } else if (period === "yesterday") {
-    return baseData.map(item => ({ ...item, orders: Math.floor(item.orders * 0.8) }));
-  } else if (period === "custom" && customDate) {
-    return baseData.map(item => ({ ...item, orders: Math.floor(item.orders * 1.2) }));
-  }
-  return baseData; // today
+// ─── Types ───
+type DashboardStats = {
+  total: number;
+  pending: number;
+  completed: number;
+  preparing: number;
+  served: number;
+  cancelled: number;
 };
 
-// Metrics data generator based on period
-const generateMetrics = (period: string) => {
-  const baseMetrics = {
-    total: 50,
-    pending: 20,
-    completed: 30,
-  };
-
-  if (period === "7d") {
-    return {
-      total: 350,
-      pending: 140,
-      completed: 210,
-    };
-  } else if (period === "30d") {
-    return {
-      total: 1500,
-      pending: 600,
-      completed: 900,
-    };
-  } else if (period === "yesterday") {
-    return {
-      total: 42,
-      pending: 15,
-      completed: 27,
-    };
-  } else if (period === "custom") {
-    return {
-      total: 75,
-      pending: 30,
-      completed: 45,
-    };
-  }
-  return baseMetrics; // today
+type ChartDataPoint = {
+  name: string;
+  orders: number;
 };
 
 const metricsConfig = [
@@ -81,35 +38,70 @@ const metricsConfig = [
     key: "total",
   },
   {
-    label: "Pending Orders",
-    icon: Clock,
-    bgIcon: "bg-red-100",
-    colorIcon: "text-red-600",
-    key: "pending",
+    label: "New Orders",
+    icon: Bell, // Changed icon to Bell for New Orders
+    bgIcon: "bg-orange-100",
+    colorIcon: "text-orange-600",
+    key: "pending", // Changed key to pending for New Orders
   },
   {
     label: "Completed Orders",
     icon: CheckCircle,
-    bgIcon: "bg-red-100",
-    colorIcon: "text-red-600",
+    bgIcon: "bg-green-100",
+    colorIcon: "text-green-600",
     key: "completed",
   },
 ];
 
 export default function DashboardPage() {
+  const params = useParams();
+  const slug = params?.menupages as string;
+  
   const [period, setPeriod] = useState("today");
   const [showDropdown, setShowDropdown] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [chartData, setChartData] = useState(generateData("today"));
-  const [metrics, setMetrics] = useState(generateMetrics("today"));
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<DashboardStats>({
+    total: 0,
+    pending: 0,
+    completed: 0,
+    preparing: 0,
+    served: 0,
+    cancelled: 0
+  });
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Update data when period or date changes
+  const fetchDashboardData = useCallback(async () => {
+    if (!slug) return;
+    setLoading(true);
+    try {
+      let url = `/api/orders/${slug}/stats?period=${period}`;
+      if (period === "custom") {
+        url += `&date=${selectedDate}`;
+      }
+      
+      const res = await fetch(url);
+      const data = await res.json();
+      
+      if (data.success) {
+        setStats(data.stats);
+        setChartData(data.chartData || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch dashboard data:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [slug, period, selectedDate]);
+
   useEffect(() => {
-    setChartData(generateData(period, period === "custom" ? selectedDate : undefined));
-    setMetrics(generateMetrics(period));
-  }, [period, selectedDate]);
+    fetchDashboardData();
+    // Poll for dashboard stats every 60 seconds
+    const interval = setInterval(fetchDashboardData, 60000);
+    return () => clearInterval(interval);
+  }, [fetchDashboardData]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -128,17 +120,16 @@ export default function DashboardPage() {
   const handlePeriodSelect = (value: string) => {
     setPeriod(value);
     setShowDropdown(false);
+    if (value !== "custom") {
+      setSelectedDate(new Date().toISOString().split('T')[0]);
+    }
   };
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.value) {
-      setSelectedDate(new Date(e.target.value));
+      setSelectedDate(e.target.value);
       setPeriod("custom");
     }
-  };
-
-  const formatDate = (date: Date) => {
-    return date.toISOString().split('T')[0];
   };
 
   const getPeriodDisplay = () => {
@@ -147,15 +138,22 @@ export default function DashboardPage() {
     if (period === "7d") return "Last 7 Days";
     if (period === "30d") return "Last 30 Days";
     if (period === "custom") {
-      return selectedDate ? formatDate(selectedDate) : "Custom Range";
+      return selectedDate || "Custom Date";
     }
     return "Today";
   };
 
-  // Get metrics values
-  const metricsValues = metricsConfig.map(config => ({
-    ...config,
-    value: metrics[config.key as keyof typeof metrics]
+  const getXAxisLabel = () => {
+    if (period === "today" || period === "yesterday" || period === "custom") {
+      return "time from 12.00 am to 12.00 pm";
+    }
+    return `date from ${chartData[0]?.name || ''} to ${chartData[chartData.length - 1]?.name || ''}`;
+  };
+
+  // Mock growth data if needed or calculate based on stats
+  const chartDataWithGrowth = chartData.map(point => ({
+    ...point,
+    growth: Math.min(100, Math.max(10, (point.orders / (stats.total || 1)) * 100))
   }));
 
   return (
@@ -163,9 +161,12 @@ export default function DashboardPage() {
       
       {/* ─── Dashboard Header ─── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-4">
-        <h2 className="text-lg sm:text-xl font-bold text-gray-900">
-          Dashboard Overview
-        </h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900">
+            Dashboard Overview
+          </h2>
+          {loading && <Loader2 size={16} className="animate-spin text-gray-400" />}
+        </div>
         
         {/* Date Filter Section - Always in same row */}
         <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -173,10 +174,10 @@ export default function DashboardPage() {
           <div className="relative min-w-0 flex-1 sm:flex-none">
             <input
               type="date"
-              value={formatDate(selectedDate)}
+              value={selectedDate}
               onChange={handleDateChange}
               className="w-full sm:w-[140px] pl-9 pr-1 py-2 bg-gray-100 border border-gray-200 rounded-lg text-[10px] sm:text-xs font-bold focus:outline-none focus:border-[#D92632] focus:ring-1 focus:ring-[#D92632]"
-              max={formatDate(new Date())}
+              max={new Date().toISOString().split('T')[0]}
               style={{ 
                 fontFamily: 'inherit',
               }}
@@ -220,7 +221,7 @@ export default function DashboardPage() {
 
       {/* ─── Metrics Cards ─── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
-        {metricsValues.map((item) => (
+        {metricsConfig.map((item) => (
           <div
             key={item.label}
             className="bg-[#F3F4F6] rounded-xl sm:rounded-2xl p-4 sm:p-5 flex items-center justify-between"
@@ -230,7 +231,7 @@ export default function DashboardPage() {
                 {item.label}
               </span>
               <span className="text-2xl sm:text-3xl font-extrabold text-gray-900">
-                {item.value}
+                {stats[item.key as keyof DashboardStats] || 0}
               </span>
             </div>
             
@@ -253,12 +254,12 @@ export default function DashboardPage() {
           </span>
         </div>
         
-        <div className="w-full h-[200px] sm:h-[250px] md:h-[280px] overflow-x-auto overflow-y-hidden">
-          <div className="min-w-[400px] sm:min-w-full h-full">
+        <div className="w-full h-[250px] sm:h-[300px] md:h-[350px] overflow-x-auto overflow-y-hidden scrollbar-hide">
+          <div className="min-w-[700px] sm:min-w-full h-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
-                data={chartData}
-                margin={{ top: 10, right: 10, left: 5, bottom: 5 }}
+                data={chartDataWithGrowth}
+                margin={{ top: 20, right: 30, left: 20, bottom: 40 }}
               >
                 <CartesianGrid
                   vertical={false}
@@ -270,20 +271,34 @@ export default function DashboardPage() {
                   axisLine={false}
                   tickLine={false}
                   tick={{ fill: "#6B7280", fontSize: 10, fontWeight: 500 }}
-                  tickMargin={5}
-                  interval={0}
-                  angle={0}
-                  textAnchor="middle"
-                  height={25}
-                />
+                  tickMargin={10}
+                  interval={period === "30d" ? 6 : (period === "7d" ? 1 : 0)}
+                  padding={{ left: 15, right: 15 }}
+                >
+                  <Label 
+                    value={getXAxisLabel()} 
+                    offset={-25} 
+                    position="insideBottom" 
+                    style={{ fill: '#6B7280', fontSize: '10px', fontWeight: 'bold' }}
+                  />
+                </XAxis>
                 <YAxis
                   axisLine={false}
                   tickLine={false}
                   tick={{ fill: "#6B7280", fontSize: 10, fontWeight: 500 }}
-                  tickMargin={5}
-                  width={25}
-                  allowDecimals={false}
-                />
+                  tickMargin={10}
+                  domain={[10, 100]}
+                  ticks={[10, 20, 30, 40, 50, 60, 70, 80, 90, 100]}
+                  unit="%"
+                >
+                  <Label 
+                    value="growth in %" 
+                    angle={-90} 
+                    position="insideLeft" 
+                    offset={-5}
+                    style={{ fill: '#6B7280', fontSize: '10px', fontWeight: 'bold', textAnchor: 'middle' }}
+                  />
+                </YAxis>
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "#fff",
@@ -299,7 +314,7 @@ export default function DashboardPage() {
                 />
                 <Line
                   type="monotone"
-                  dataKey="orders"
+                  dataKey="growth"
                   stroke="#D92632"
                   strokeWidth={2}
                   dot={false}
@@ -310,6 +325,16 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+      
+      <style jsx global>{`
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
     </div>
   );
 }

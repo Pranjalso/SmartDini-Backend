@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/connect';
 import Order from '@/lib/db/models/Order';
 import MenuItem from '@/lib/db/models/MenuItem';
+import Cafe from '@/lib/db/models/Cafe';
 import { withAuth, withCafeAccess } from '@/lib/auth/middleware';
 import { AuthRequest } from '@/lib/auth/middleware';
 import mongoose from 'mongoose';
 
 // Get orders for a cafe
-export const GET = async (
-  req: NextRequest,
+export const GET = withCafeAccess(async (
+  req: AuthRequest,
   { params }: { params: { slug: string } }
 ) => {
   try {
@@ -24,7 +25,11 @@ export const GET = async (
     let query: any = { cafeSlug: params.slug };
 
     if (status) {
-      query.orderStatus = status;
+      if (status.includes(',')) {
+        query.orderStatus = { $in: status.split(',') };
+      } else {
+        query.orderStatus = status;
+      }
     }
 
     if (paymentStatus) {
@@ -33,6 +38,10 @@ export const GET = async (
 
     if (date) {
       const targetDate = new Date(date);
+      if (isNaN(targetDate.getTime())) {
+        throw new Error('Invalid date format');
+      }
+      targetDate.setHours(0, 0, 0, 0);
       const nextDate = new Date(targetDate);
       nextDate.setDate(nextDate.getDate() + 1);
       
@@ -43,9 +52,14 @@ export const GET = async (
     }
 
     if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        throw new Error('Invalid start or end date format');
+      }
       query.createdAt = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
+        $gte: start,
+        $lte: end,
       };
     }
 
@@ -103,14 +117,14 @@ export const GET = async (
         todayRevenue,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching orders:', error);
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      { success: false, message: error.message || 'Internal server error' },
       { status: 500 }
     );
   }
-};
+});
 
 // Create new order (public - no auth required)
 export const POST = async (
@@ -119,9 +133,8 @@ export const POST = async (
 ) => {
   try {
     await connectDB();
-
+    const { slug } = params;
     const body = await req.json();
-    const slug = params.slug;
 
     const itemsInput: Array<{ menuItemId: string; quantity: number }> = Array.isArray(body.items)
       ? body.items
@@ -176,11 +189,15 @@ export const POST = async (
       );
     }
 
+    // Fetch cafe settings for dynamic tax rate
+    const cafe = await Cafe.findOne({ slug }).select('taxRate');
+    const taxRate = cafe?.taxRate ?? 5.0; // Fallback to 5% if not found
+
     const subtotal = items.reduce(
       (sum: number, item) => sum + item.price * item.quantity,
       0
     );
-    const tax = subtotal * 0.05;
+    const tax = subtotal * (taxRate / 100);
     const total = subtotal + tax;
 
     const lastOrder = await Order.findOne({ cafeSlug: slug }).sort({ orderNumber: -1 }).select('orderNumber').lean();

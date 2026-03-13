@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 
 // Custom toast hook with professional styling
 const useToast = () => {
@@ -163,6 +164,7 @@ const toastStyles = `
 `;
 
 export default function SuperAdmin() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'add' | 'manage'>('add');
   const [saving, setSaving] = useState(false);
   const [cafeName, setCafeName] = useState('');
@@ -170,6 +172,7 @@ export default function SuperAdmin() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [plan, setPlan] = useState('demo');
+  const [taxRate, setTaxRate] = useState(5.0);
   const [showSuccess, setShowSuccess] = useState(false);
   const [menuLink, setMenuLink] = useState('');
   const [adminLink, setAdminLink] = useState('');
@@ -185,6 +188,8 @@ export default function SuperAdmin() {
   const [editLocation, setEditLocation] = useState('');
   const [editPlan, setEditPlan] = useState('1');
   const [editEndDate, setEditEndDate] = useState('');
+  const [editTaxRate, setEditTaxRate] = useState(5.0);
+  const [editUsername, setEditUsername] = useState('');
   // New state for edit start date
   const [editStartDate, setEditStartDate] = useState('');
 
@@ -220,6 +225,7 @@ export default function SuperAdmin() {
   // Plan mapping helpers
   const planLabelFromCode = (code: string) => {
     const map: Record<string, string> = {
+      demo1: 'Demo (1 Day)',
       demo: 'Demo (7 Days)',
       '1': '1 Month',
       '3': '3 Months',
@@ -231,6 +237,7 @@ export default function SuperAdmin() {
   };
   const planCodeFromLabel = (label: string) => {
     const rev: Record<string, string> = {
+      'Demo (1 Day)': 'demo1',
       'Demo (7 Days)': 'demo',
       '1 Month': '1',
       '3 Months': '3',
@@ -241,8 +248,39 @@ export default function SuperAdmin() {
     return rev[label] || 'demo';
   };
 
-  // Refs for modal close on outside click
+  // refs for modal close on outside click
   const modalRef = useRef<HTMLDivElement>(null);
+
+  // Auto-refresh session logic
+  useEffect(() => {
+    const refreshSession = async () => {
+      try {
+        const res = await fetch('/api/auth/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({}),
+        });
+        if (!res.ok) {
+          console.warn('Session refresh failed');
+          // If refresh fails, we might be truly unauthorized
+          if (res.status === 401) {
+            router.push('/adminlogin');
+          }
+        }
+      } catch (err) {
+        console.error('Error refreshing session:', err);
+      }
+    };
+
+    // Refresh every 30 minutes
+    const interval = setInterval(refreshSession, 1000 * 60 * 30);
+    
+    // Initial refresh on mount
+    refreshSession();
+
+    return () => clearInterval(interval);
+  }, [router]);
 
   // Set default date on component mount
   useEffect(() => {
@@ -261,7 +299,9 @@ export default function SuperAdmin() {
 
     const date = new Date(startDate);
     
-    if (plan === 'demo') {
+    if (plan === 'demo1') {
+      date.setDate(date.getDate() + 1);
+    } else if (plan === 'demo') {
       date.setDate(date.getDate() + 7);
     } else {
       date.setMonth(date.getMonth() + parseInt(plan));
@@ -276,7 +316,9 @@ export default function SuperAdmin() {
 
     const date = new Date(editStartDate);
     
-    if (editPlan === 'demo') {
+    if (editPlan === 'demo1') {
+      date.setDate(date.getDate() + 1);
+    } else if (editPlan === 'demo') {
       date.setDate(date.getDate() + 7);
     } else if (editPlan === 'lifetime') {
       date.setFullYear(date.getFullYear() + 100);
@@ -309,6 +351,7 @@ export default function SuperAdmin() {
     const form = e.currentTarget as HTMLFormElement;
     const fd = new FormData(form);
     const planMap: Record<string, string> = {
+      demo1: 'Demo (1 Day)',
       demo: 'Demo (7 Days)',
       '1': '1 Month',
       '3': '3 Months',
@@ -322,6 +365,7 @@ export default function SuperAdmin() {
       city: (fd.get('city') as string) || '',
       location: (fd.get('location') as string) || '',
       subscriptionPlan: planMap[plan] || 'Demo (7 Days)',
+      taxRate,
       startDate,
       endDate,
       username: (fd.get('username') as string) || '',
@@ -335,6 +379,10 @@ export default function SuperAdmin() {
       body: JSON.stringify(payload),
     })
       .then(async (res) => {
+        if (res.status === 401) {
+          router.push('/adminlogin');
+          return;
+        }
         const data = await res.json();
         if (!res.ok || !data.success) {
           throw new Error(data.message || 'Failed to create cafe');
@@ -387,6 +435,10 @@ export default function SuperAdmin() {
     const qs = params.toString() ? `?${params.toString()}` : '';
     fetch(`/api/cafes${qs}`, { credentials: 'include' })
       .then(async (res) => {
+        if (res.status === 401) {
+          router.push('/adminlogin');
+          return;
+        }
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || 'Failed to fetch cafes');
         const list = Array.isArray(data.data) ? data.data : [];
@@ -422,7 +474,11 @@ export default function SuperAdmin() {
       credentials: 'include',
       body: JSON.stringify({ isActive }),
     })
-      .then(() => {
+      .then((res) => {
+        if (res.status === 401) {
+          router.push('/adminlogin');
+          return;
+        }
         fetchCafes();
         toast({
           title: isActive ? "✅ Cafe Activated" : "⏸️ Cafe Deactivated",
@@ -451,7 +507,7 @@ export default function SuperAdmin() {
   }, [cityFilter, statusFilter, debouncedSearch]);
 
   // Modal functions - Updated to include all fields including start date
-  const openEditModal = (name: string, owner: string, city: string, email: string = '', location: string = '', currentPlan: string = '1', endDate: string = '', startDate: string = '', cafeSlug?: string) => {
+  const openEditModal = (name: string, owner: string, city: string, email: string = '', location: string = '', currentPlan: string = '1', endDate: string = '', startDate: string = '', cafeSlug?: string, taxRateValue: number = 5.0, username: string = '') => {
     setEditName(name);
     setEditOwner(owner);
     setEditCity(city);
@@ -459,6 +515,8 @@ export default function SuperAdmin() {
     setEditLocation(location);
     setEditPlan(currentPlan);
     setEditEndDate(endDate);
+    setEditTaxRate(taxRateValue);
+    setEditUsername(username);
     setEditStartDate(startDate || new Date().toISOString().split('T')[0]); // Set default if not provided
     if (cafeSlug) setEditSlug(cafeSlug);
     setShowModal(true);
@@ -485,10 +543,17 @@ export default function SuperAdmin() {
           email: editEmail,
           location: editLocation,
           subscriptionPlan,
+          taxRate: editTaxRate,
+          username: editUsername,
+          slug: editSlug,
           startDate: editStartDate,
           endDate: editEndDate,
         }),
       });
+      if (res.status === 401) {
+        router.push('/adminlogin');
+        return;
+      }
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.message || 'Failed to update');
@@ -692,18 +757,19 @@ export default function SuperAdmin() {
                 <div className="form-group">
                   <label>Subscription Plan</label>
                   <select 
-                    id="subPlan" 
-                    className="form-control" 
-                    value={plan}
-                    onChange={(e) => setPlan(e.target.value)}
-                    required
-                  >
-                    <option value="demo">Demo (7 Days)</option>
-                    <option value="1">1 Month</option>
-                    <option value="3">3 Months</option>
-                    <option value="6">6 Months</option>
-                    <option value="12">12 Months</option>
-                  </select>
+                      id="subPlan" 
+                      className="form-control" 
+                      value={plan}
+                      onChange={(e) => setPlan(e.target.value)}
+                      required
+                    >
+                      <option value="demo1">Demo (1 Day)</option>
+                      <option value="demo">Demo (7 Days)</option>
+                      <option value="1">1 Month</option>
+                      <option value="3">3 Months</option>
+                      <option value="6">6 Months</option>
+                      <option value="12">12 Months</option>
+                    </select>
                 </div>
                 <div className="form-group">
                   <label>Start Date</label>
@@ -724,6 +790,19 @@ export default function SuperAdmin() {
                     className="form-control" 
                     value={endDate}
                     readOnly 
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Tax Rate (%)</label>
+                  <input 
+                    type="number" 
+                    className="form-control" 
+                    value={taxRate}
+                    onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    required 
                   />
                 </div>
                 
@@ -890,7 +969,9 @@ export default function SuperAdmin() {
                               planCodeFromLabel(cafe.subscriptionPlan),
                                 new Date(cafe.endDate).toISOString().split('T')[0],
                                 new Date(cafe.startDate).toISOString().split('T')[0],
-                                cafe.slug
+                                cafe.slug,
+                                cafe.taxRate || 5.0,
+                                cafe.username || ''
                               )
                             }
                           >
@@ -1001,16 +1082,17 @@ export default function SuperAdmin() {
                       />
                     </div>
                   </div>
-                  
-                  {/* Row 4: Plan and Start Date */}
+
+                  {/* Row 4: Subscription Plan, Start Date, End Date */}
                   <div className="form-row">
                     <div className="form-group">
-                      <label>Extend Plan</label>
+                      <label>Subscription Plan</label>
                       <select 
-                        className="form-control"
+                        className="form-control" 
                         value={editPlan}
                         onChange={(e) => setEditPlan(e.target.value)}
                       >
+                        <option value="demo1">Demo (1 Day)</option>
                         <option value="demo">Demo (7 Days)</option>
                         <option value="1">1 Month</option>
                         <option value="3">3 Months</option>
@@ -1028,11 +1110,7 @@ export default function SuperAdmin() {
                         onChange={(e) => setEditStartDate(e.target.value)}
                       />
                     </div>
-                  </div>
-
-                  {/* Row 5: End Date (auto-calculated) */}
-                  <div className="form-row full-width">
-                    <div className="form-group full-width">
+                    <div className="form-group">
                       <label>New End Date (Auto-calculated)</label>
                       <input 
                         type="date" 
@@ -1040,6 +1118,43 @@ export default function SuperAdmin() {
                         value={editEndDate}
                         readOnly
                         style={{ backgroundColor: '#f0f0f0', cursor: 'not-allowed' }}
+                      />
+                    </div>
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Tax Rate (%)</label>
+                      <input 
+                        type="number" 
+                        className="form-control" 
+                        value={editTaxRate}
+                        onChange={(e) => setEditTaxRate(parseFloat(e.target.value) || 0)}
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        required 
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Username</label>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        value={editUsername}
+                        onChange={(e) => setEditUsername(e.target.value)}
+                        required 
+                      />
+                    </div>
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group full-width">
+                      <label>Slug (URL ID - Changing this breaks QR codes)</label>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        value={editSlug}
+                        onChange={(e) => setEditSlug(e.target.value.toLowerCase().replace(/ /g, '-'))}
+                        required 
                       />
                     </div>
                   </div>

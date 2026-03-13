@@ -1,83 +1,31 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Package, Clock, Armchair, CheckCircle, Wallet, Smartphone } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Package, Clock, Armchair, CheckCircle, Wallet, Smartphone, Loader2, ChevronDown } from "lucide-react";
 import { useRouter, useParams } from "next/navigation";
+import { useToast } from "@/hooks/use-toast";
 
 // ─── Types ───
 type OrderItem = {
-  id: number; // The quantity badge number (1, 2, 4)
+  menuItemId: string;
   name: string;
   price: number;
+  quantity: number;
 };
 
 type PaymentMethod = "cash" | "upi";
+type OrderStatus = "pending" | "preparing" | "ready" | "served" | "cancelled";
 
 type Order = {
-  id: string;
-  number: number;
-  time: string;
-  table: string;
+  _id: string;
+  orderNumber: number;
+  createdAt: string;
+  tableNumber: string;
   total: number;
-  status: "pending" | "served";
+  orderStatus: OrderStatus;
   paymentMethod: PaymentMethod;
   items: OrderItem[];
 };
-
-// ─── Data ───
-const PENDING_ORDERS: Order[] = [
-  {
-    id: "6", number: 6, time: "10:30 PM", table: "Table 001", total: 497, status: "pending", paymentMethod: "upi",
-    items: [
-      { id: 1, name: "Chicken Burger", price: 199 },
-      { id: 2, name: "Chicken Burger", price: 199 },
-      { id: 4, name: "Chicken Burger", price: 199 },
-    ],
-  },
-  {
-    id: "5", number: 5, time: "10:30 PM", table: "Table 001", total: 497, status: "pending", paymentMethod: "cash",
-    items: [
-      { id: 1, name: "Chicken Burger", price: 199 },
-      { id: 2, name: "Chicken Burger", price: 199 },
-      { id: 4, name: "Chicken Burger", price: 199 },
-    ],
-  },
-  {
-    id: "4", number: 4, time: "10:30 PM", table: "Table 001", total: 497, status: "pending", paymentMethod: "upi",
-    items: [
-      { id: 1, name: "Chicken Burger", price: 199 },
-      { id: 2, name: "Chicken Burger", price: 199 },
-      { id: 4, name: "Chicken Burger", price: 199 },
-    ],
-  },
-];
-
-const SERVED_ORDERS: Order[] = [
-  {
-    id: "3", number: 3, time: "10:30 PM", table: "Table 001", total: 497, status: "served", paymentMethod: "cash",
-    items: [
-      { id: 1, name: "Chicken Burger", price: 199 },
-      { id: 2, name: "Chicken Burger", price: 199 },
-      { id: 4, name: "Chicken Burger", price: 199 },
-    ],
-  },
-  {
-    id: "2", number: 2, time: "10:30 PM", table: "Table 001", total: 497, status: "served", paymentMethod: "upi",
-    items: [
-      { id: 1, name: "Chicken Burger", price: 199 },
-      { id: 2, name: "Chicken Burger", price: 199 },
-      { id: 4, name: "Chicken Burger", price: 199 },
-    ],
-  },
-  {
-    id: "1", number: 1, time: "10:30 PM", table: "Table 001", total: 497, status: "served", paymentMethod: "cash",
-    items: [
-      { id: 1, name: "Chicken Burger", price: 199 },
-      { id: 2, name: "Chicken Burger", price: 199 },
-      { id: 4, name: "Chicken Burger", price: 199 },
-    ],
-  },
-];
 
 // Helper to get payment method badge styles
 const getPaymentBadge = (method: PaymentMethod) => {
@@ -102,30 +50,43 @@ const getPaymentBadge = (method: PaymentMethod) => {
 function OrderCard({ 
   order, 
   onMarkAsServed,
-  onMoveToPayment
+  onMoveToPayment,
+  isUpdating
 }: { 
   order: Order; 
   onMarkAsServed?: (orderId: string) => void;
   onMoveToPayment?: (orderId: string) => void;
+  isUpdating?: boolean;
 }) {
-  const isPending = order.status === "pending";
+  const [expanded, setExpanded] = useState(false);
+  const isPreparing = order.orderStatus === "preparing" || order.orderStatus === "ready";
   const paymentBadge = getPaymentBadge(order.paymentMethod);
   const PaymentIcon = paymentBadge.icon;
+  
+  const showExpandButton = order.items.length > 3;
+  const visibleItems = showExpandButton && !expanded ? order.items.slice(0, 2) : order.items;
+  const remainingCount = order.items.length - 2;
 
   const handleMarkAsServed = () => {
     if (onMarkAsServed) {
-      onMarkAsServed(order.id);
+      onMarkAsServed(order._id);
     }
   };
 
   const handleMoveToPayment = () => {
     if (onMoveToPayment) {
-      onMoveToPayment(order.id);
+      onMoveToPayment(order._id);
     }
   };
 
+  // Format time
+  const formatTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
   return (
-    <div className="bg-[#F3F4F6] rounded-2xl p-4 mb-4 shadow-sm hover:shadow-md transition-shadow">
+    <div className={`bg-[#F3F4F6] rounded-2xl p-4 mb-4 shadow-sm hover:shadow-md transition-all ${isUpdating ? 'opacity-60 pointer-events-none' : ''}`}>
       {/* Header */}
       <div className="flex flex-col xs:flex-row items-start justify-between gap-3 mb-4">
         <div className="flex items-start gap-3 w-full xs:w-auto">
@@ -138,7 +99,7 @@ function OrderCard({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h4 className="font-bold text-gray-900 text-sm sm:text-base truncate">
-                Order #{order.number}
+                Order #{order.orderNumber}
               </h4>
               
               {/* Payment Method Badge - Beside ID */}
@@ -151,12 +112,12 @@ function OrderCard({
             <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-gray-500 font-medium mt-0.5 flex-wrap">
               <div className="flex items-center gap-1">
                 <Clock size={12} />
-                <span>{order.time}</span>
+                <span>{formatTime(order.createdAt)}</span>
               </div>
               <span className="text-gray-300">•</span>
               <div className="flex items-center gap-1">
                 <Armchair size={12} />
-                <span>{order.table}</span>
+                <span>{order.tableNumber}</span>
               </div>
             </div>
           </div>
@@ -165,14 +126,15 @@ function OrderCard({
         {/* Price & Action Buttons */}
         <div className="flex items-center justify-between xs:justify-end gap-3 w-full xs:w-auto mt-2 xs:mt-0">
           <span className="font-extrabold text-gray-900 text-sm sm:text-base">
-            ₹{order.total}
+            ₹{order.total.toFixed(2)}
           </span>
           
-          {isPending ? (
-            /* Mark as Served Button - for pending orders */
+          {isPreparing ? (
+            /* Mark as Served Button - for preparing orders */
             <button
               onClick={handleMarkAsServed}
-              className="flex items-center gap-1 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-[#10B981] text-white rounded-lg text-[10px] sm:text-xs font-bold hover:bg-[#059669] transition-colors shadow-sm whitespace-nowrap"
+              disabled={isUpdating}
+              className="flex items-center gap-1 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-[#10B981] text-white rounded-lg text-[10px] sm:text-xs font-bold hover:bg-[#059669] transition-colors shadow-sm whitespace-nowrap disabled:opacity-50"
             >
               <CheckCircle size={12} />
               <span>Mark as Served</span>
@@ -181,7 +143,8 @@ function OrderCard({
             /* Check Icon - for served orders */
             <button
               onClick={handleMoveToPayment}
-              className="p-1.5 sm:p-1.5 bg-[#10B981] text-white rounded-full hover:bg-[#059669] transition-colors shadow-sm"
+              disabled={isUpdating}
+              className="p-1.5 sm:p-1.5 bg-[#10B981] text-white rounded-full hover:bg-[#059669] transition-colors shadow-sm disabled:opacity-50"
               title="Move to Payment Completed"
             >
               <CheckCircle size={16} strokeWidth={2} />
@@ -192,25 +155,44 @@ function OrderCard({
 
       {/* Items List */}
       <div className="space-y-1.5 sm:space-y-2">
-        {order.items.map((item, idx) => (
+        {visibleItems.map((item, idx) => (
           <div
-            key={`${order.id}-${idx}`}
+            key={`${order._id}-${idx}`}
             className="bg-white rounded-xl px-3 py-2 sm:py-2.5 flex items-center justify-between shadow-sm"
           >
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <span className="w-5 h-5 rounded bg-[#FEE2E2] text-[#D92632] text-[10px] font-bold flex items-center justify-center flex-shrink-0">
-                {item.id}
+                {item.quantity}
               </span>
               <span className="text-xs sm:text-sm font-semibold text-gray-800 truncate">
                 {item.name}
               </span>
             </div>
             <span className="text-xs sm:text-sm font-bold text-gray-600 whitespace-nowrap ml-2">
-              ₹{item.price}
+              ₹{(item.price * item.quantity).toFixed(2)}
             </span>
           </div>
         ))}
+        
+        {showExpandButton && !expanded && remainingCount > 0 && (
+          <div className="text-[10px] sm:text-xs text-gray-400 italic px-1">
+            +{remainingCount} more item{remainingCount > 1 ? 's' : ''}
+          </div>
+        )}
       </div>
+
+      {/* Expand/Collapse Toggle */}
+      {showExpandButton && (
+        <div className="mt-3 pt-3 border-t border-gray-200/50">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="w-full flex items-center justify-center gap-1.5 py-1 text-[11px] sm:text-xs font-bold text-[#D92632] hover:bg-[#FEE2E2]/30 rounded-lg transition-colors"
+          >
+            <span>{expanded ? 'Show Less' : 'View Details'}</span>
+            <ChevronDown size={14} className={`transform transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -219,10 +201,13 @@ function OrderCard({
 export default function OrdersPage() {
   const router = useRouter();
   const params = useParams();
-  const menupages = params?.menupages as string;
+  const slug = params?.menupages as string;
+  const { toast } = useToast();
   
-  const [pendingOrders, setPendingOrders] = useState(PENDING_ORDERS);
-  const [servedOrders, setServedOrders] = useState(SERVED_ORDERS);
+  const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
+  const [servedOrders, setServedOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<"pending" | "served">("pending");
   const [isMobile, setIsMobile] = useState(false);
 
@@ -238,44 +223,116 @@ export default function OrdersPage() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  const handleMarkAsServed = (orderId: string) => {
-    // Find the order in pending orders
-    const orderToMove = pendingOrders.find(order => order.id === orderId);
-    
-    if (orderToMove) {
-      // Update the order status to served
-      const updatedOrder = { ...orderToMove, status: "served" as const };
+  const fetchOrders = useCallback(async () => {
+    if (!slug) return;
+    try {
+      // Fetch both preparing/ready and served orders - only those that haven't paid yet
+      const [preparingRes, servedRes] = await Promise.all([
+        fetch(`/api/orders/${slug}?status=preparing,ready&paymentStatus=pending`),
+        fetch(`/api/orders/${slug}?status=served&paymentStatus=pending`)
+      ]);
       
-      // Remove from pending and add to served
-      setPendingOrders(pendingOrders.filter(order => order.id !== orderId));
-      setServedOrders([updatedOrder, ...servedOrders]);
+      const preparingData = await preparingRes.json();
+      const servedData = await servedRes.json();
+      
+      if (preparingData.success) setPendingOrders(preparingData.data || []);
+      if (servedData.success) setServedOrders(servedData.data || []);
+    } catch (err) {
+      console.error("Failed to fetch orders:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [slug]);
+
+  useEffect(() => {
+    fetchOrders();
+    // Poll for active orders every 15 seconds
+    const interval = setInterval(fetchOrders, 15000);
+    return () => clearInterval(interval);
+  }, [fetchOrders]);
+
+  const handleMarkAsServed = async (orderId: string) => {
+    setUpdatingId(orderId);
+    try {
+      const res = await fetch(`/api/orders/${slug}?id=${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderStatus: "served" }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({
+          title: "Order Served",
+          description: `Order #${pendingOrders.find(o => o._id === orderId)?.orderNumber} marked as served.`,
+        });
+        // Move order locally
+        const orderToMove = pendingOrders.find(o => o._id === orderId);
+        if (orderToMove) {
+          setPendingOrders(prev => prev.filter(o => o._id !== orderId));
+          setServedOrders(prev => [{ ...orderToMove, orderStatus: "served" }, ...prev]);
+        }
+      }
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || "Failed to update order",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingId(null);
     }
   };
 
-  const handleMoveToPayment = (orderId: string) => {
-    // Find the order in served orders
-    const orderToMove = servedOrders.find(order => order.id === orderId);
-    
-    if (orderToMove) {
-      // Remove from served orders
-      setServedOrders(servedOrders.filter(order => order.id !== orderId));
-      
-      // Store the order in sessionStorage to retrieve on payment-completed page
-      sessionStorage.setItem('completedOrder', JSON.stringify(orderToMove));
-      
-      // Navigate to payment completed page with the correct dynamic route
-      router.push(`/${menupages}/admin/payment-completed?orderId=${orderId}`);
+  const handleMoveToPayment = async (orderId: string) => {
+    setUpdatingId(orderId);
+    try {
+      const res = await fetch(`/api/orders/${slug}?id=${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentStatus: "completed" }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({
+          title: "Payment Completed",
+          description: `Order #${servedOrders.find(o => o._id === orderId)?.orderNumber} moved to payment completed.`,
+        });
+        // Remove order locally
+        setServedOrders(prev => prev.filter(o => o._id !== orderId));
+      } else {
+        throw new Error(data.message || "Failed to update payment status");
+      }
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || "Failed to update order",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingId(null);
     }
   };
+
+  if (loading && pendingOrders.length === 0 && servedOrders.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+        <Loader2 size={48} className="mb-4 animate-spin opacity-20" />
+        <p className="text-sm font-medium">Loading orders...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-sm border border-gray-100 min-h-[600px] w-full overflow-x-hidden">
       
       {/* ─── Top Header ─── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
-        <h2 className="text-lg sm:text-xl font-extrabold text-gray-900">
-          Orders Management
-        </h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg sm:text-xl font-extrabold text-gray-900">
+            Orders Management
+          </h2>
+          {loading && <Loader2 size={16} className="animate-spin text-gray-400" />}
+        </div>
         
         {/* Summary Badges - Clickable on Mobile */}
         <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -299,7 +356,7 @@ export default function OrdersPage() {
             }`}
           >
             <Clock size={16} />
-            <span>{pendingOrders.length} Pending</span>
+            <span>{pendingOrders.length} Preparing</span>
           </button>
         </div>
       </div>
@@ -310,20 +367,21 @@ export default function OrdersPage() {
           <div>
             <div className="flex items-center gap-2 mb-4">
               <Clock size={18} className="text-[#EF4444]" />
-              <h3 className="font-bold text-base text-gray-900">Pending Orders</h3>
+              <h3 className="font-bold text-base text-gray-900">Preparing Orders</h3>
             </div>
             <div className="flex flex-col">
               {pendingOrders.map((order) => (
                 <OrderCard 
-                  key={order.id} 
+                  key={order._id} 
                   order={order} 
                   onMarkAsServed={handleMarkAsServed}
+                  isUpdating={updatingId === order._id}
                 />
               ))}
               {pendingOrders.length === 0 && (
                 <div className="text-center py-8 text-gray-400 bg-[#F9FAFB] rounded-2xl">
                   <Package size={32} className="mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">No pending orders</p>
+                  <p className="text-sm">No orders in preparation</p>
                 </div>
               )}
             </div>
@@ -337,9 +395,10 @@ export default function OrdersPage() {
             <div className="flex flex-col">
               {servedOrders.map((order) => (
                 <OrderCard 
-                  key={order.id} 
+                  key={order._id} 
                   order={order} 
                   onMoveToPayment={handleMoveToPayment}
+                  isUpdating={updatingId === order._id}
                 />
               ))}
               {servedOrders.length === 0 && (
@@ -360,20 +419,21 @@ export default function OrdersPage() {
         <div>
           <div className="flex items-center gap-2 mb-4">
             <Clock size={18} className="text-[#EF4444]" />
-            <h3 className="font-bold text-base text-gray-900">Pending Orders</h3>
+            <h3 className="font-bold text-base text-gray-900">Preparing Orders</h3>
           </div>
           <div className="flex flex-col">
             {pendingOrders.map((order) => (
               <OrderCard 
-                key={order.id} 
+                key={order._id} 
                 order={order} 
                 onMarkAsServed={handleMarkAsServed}
+                isUpdating={updatingId === order._id}
               />
             ))}
             {pendingOrders.length === 0 && (
               <div className="text-center py-8 text-gray-400 bg-[#F9FAFB] rounded-2xl">
                 <Package size={32} className="mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No pending orders</p>
+                <p className="text-sm">No orders in preparation</p>
               </div>
             )}
           </div>
@@ -388,9 +448,10 @@ export default function OrdersPage() {
           <div className="flex flex-col">
             {servedOrders.map((order) => (
               <OrderCard 
-                key={order.id} 
+                key={order._id} 
                 order={order} 
                 onMoveToPayment={handleMoveToPayment}
+                isUpdating={updatingId === order._id}
               />
             ))}
             {servedOrders.length === 0 && (

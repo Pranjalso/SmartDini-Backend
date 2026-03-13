@@ -2,17 +2,18 @@
 
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
-import { Eye, EyeOff, X, Mail, Lock, CheckCircle } from "lucide-react";
-import { useToast, toast, ToastProvider, ToastViewport, Toast, ToastTitle, ToastDescription, ToastClose } from "@/hooks/use-toast";
+import { Eye, EyeOff, X, Mail, Lock, CheckCircle, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function CafeAdminLogin({ params }: { params: { menupages: string } }) {
+  const { menupages } = params;
   const router = useRouter();
   const [show, setShow] = useState(false);
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
-  const { toasts, dismiss } = useToast();
+  const { toast } = useToast();
   
   // Forgot password modal states
   const [showForgotModal, setShowForgotModal] = useState(false);
@@ -33,6 +34,12 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
   const [cooldown, setCooldown] = useState(0);
   const [cooldownTimer, setCooldownTimer] = useState<NodeJS.Timeout | null>(null);
 
+  useEffect(() => {
+    return () => {
+      if (cooldownTimer) clearInterval(cooldownTimer);
+    };
+  }, [cooldownTimer]);
+
   const onLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -47,7 +54,7 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
       if (!res.ok || !data.success) {
         throw new Error(data.message || 'Invalid credentials');
       }
-      router.push(`/${params.menupages}/admin`);
+      router.push(`/${menupages}/admin`);
     } catch (err: any) {
       setErrors({ login: err.message || 'Login failed' });
     } finally {
@@ -88,7 +95,7 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
       const res = await fetch('/api/auth/cafe/forgot/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: params.menupages, email }),
+        body: JSON.stringify({ slug: menupages, email }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
@@ -97,10 +104,12 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
       if (data.sent) {
         setCurrentStep('otp');
         setErrors({});
-        toast({ title: "Verification code sent", description: `We sent a code to ${email}` });
+        toast({
+          title: "Verification code sent",
+          description: `We sent a code to ${email}`,
+        });
         // Start resend cooldown
         setCooldown(60);
-        if (cooldownTimer) clearInterval(cooldownTimer);
         const t = setInterval(() => {
           setCooldown((prev) => {
             if (prev <= 1) {
@@ -138,7 +147,7 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
       const res = await fetch('/api/auth/cafe/forgot/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: params.menupages, email, otp }),
+        body: JSON.stringify({ slug: menupages, email, otp }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
@@ -146,7 +155,10 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
       }
       setCurrentStep('newPassword');
       setErrors({});
-      toast({ title: "Code verified", description: "Enter your new password" });
+      toast({
+        title: "Code verified",
+        description: "Enter your new password",
+      });
     } catch (err: any) {
       setErrors({ otp: err.message || 'Invalid code' });
     } finally {
@@ -186,7 +198,7 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
       const res = await fetch('/api/auth/cafe/forgot/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: params.menupages, email, otp, newPassword }),
+        body: JSON.stringify({ slug: menupages, email, otp, newPassword }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
@@ -207,7 +219,10 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
         setNewPassword("");
         setConfirmPassword("");
       }, 1600);
-      toast({ title: "Password updated", description: "You can now log in with the new password" });
+      toast({
+        title: "Password updated",
+        description: "You can now log in with the new password",
+      });
     } catch (err: any) {
       setErrors({ newPassword: err.message || 'Failed to reset password' });
     } finally {
@@ -225,10 +240,10 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
     setConfirmPassword("");
     setErrors({});
     setShowSuccess(false);
+    setCooldown(0);
   };
 
   return (
-    <ToastProvider>
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <form
         onSubmit={onLogin}
@@ -281,10 +296,17 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
           )}
 
           <Button type="submit" disabled={isLoading} className="w-full h-12 text-base font-semibold bg-primary hover:bg-primary/90 border-2 border-primary/20">
-            {isLoading ? 'Signing in...' : 'Log In to Dashboard'}
+            {isLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Signing in...
+              </span>
+            ) : (
+              'Log In to Dashboard'
+            )}
           </Button>
           
-          {/* Forgot Password Link - Updated */}
+          {/* Forgot Password Link */}
           <div className="text-xs text-right">
             <button 
               onClick={handleForgotClick}
@@ -363,8 +385,8 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
                         className="w-full h-11 bg-primary hover:bg-primary/90 text-white font-medium"
                       >
                         {isLoading ? (
-                          <span className="flex items-center gap-2">
-                            <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <span className="flex items-center justify-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
                             Sending...
                           </span>
                         ) : (
@@ -421,8 +443,8 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
                         className="w-full h-11 bg-primary hover:bg-primary/90 text-white font-medium"
                       >
                         {isLoading ? (
-                          <span className="flex items-center gap-2">
-                            <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <span className="flex items-center justify-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
                             Verifying...
                           </span>
                         ) : (
@@ -523,8 +545,8 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
                           className="flex-1 h-11 bg-primary hover:bg-primary/90 text-white font-medium"
                         >
                           {isLoading ? (
-                            <span className="flex items-center gap-2">
-                              <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <span className="flex items-center justify-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
                               Saving...
                             </span>
                           ) : (
@@ -565,17 +587,6 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
           animation-name: zoom-in;
         }
       `}</style>
-      {toasts.map(function ({ id, title, description, ...props }) {
-        return (
-          <Toast key={id} {...(props as any)}>
-            {title ? <ToastTitle>{title}</ToastTitle> : null}
-            {description ? <ToastDescription>{description}</ToastDescription> : null}
-            <ToastClose onClick={() => dismiss(id)} />
-          </Toast>
-        )
-      })}
-      <ToastViewport />
     </div>
-    </ToastProvider>
   );
 }

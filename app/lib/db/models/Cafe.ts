@@ -6,7 +6,7 @@ export interface ICafeDocument extends Document {
   email: string;
   city: string;
   location: string;
-  subscriptionPlan: 'Demo (7 Days)' | '1 Month' | '3 Months' | '6 Months' | '12 Months' | 'Lifetime';
+  subscriptionPlan: 'Demo (1 Day)' | 'Demo (7 Days)' | '1 Month' | '3 Months' | '6 Months' | '12 Months' | 'Lifetime';
   startDate: Date;
   endDate: Date;
   slug: string;
@@ -15,6 +15,7 @@ export interface ICafeDocument extends Document {
   isActive: boolean;
   tokenVersion?: number;
   passwordChangedAt?: Date;
+  taxRate: number;
 }
 
 const CafeSchema = new Schema<ICafeDocument>(
@@ -47,7 +48,7 @@ const CafeSchema = new Schema<ICafeDocument>(
     },
     subscriptionPlan: {
       type: String,
-      enum: ['Demo (7 Days)', '1 Month', '3 Months', '6 Months', '12 Months', 'Lifetime'],
+      enum: ['Demo (1 Day)', 'Demo (7 Days)', '1 Month', '3 Months', '6 Months', '12 Months', 'Lifetime'],
       required: true,
     },
     startDate: {
@@ -87,9 +88,17 @@ const CafeSchema = new Schema<ICafeDocument>(
       type: Date,
       default: () => new Date(),
     },
+    taxRate: {
+      type: Number,
+      default: 5.0,
+      min: [0, 'Tax rate cannot be negative'],
+      max: [100, 'Tax rate cannot exceed 100%'],
+    },
   },
   {
     timestamps: true,
+    // Add this line to explicitly set the collection name
+    collection: 'cafes',
   }
 );
 
@@ -100,4 +109,10 @@ CafeSchema.index({ city: 1 });
 CafeSchema.index({ isActive: 1 });
 CafeSchema.index({ email: 1 });
 
-export default mongoose.models.Cafe || mongoose.model<ICafeDocument>('Cafe', CafeSchema);
+// In development, delete the model to ensure schema changes (like new enum values) are picked up
+if (process.env.NODE_ENV === 'development') {
+  delete mongoose.models.Cafe;
+}
+
+const Cafe = mongoose.models.Cafe || mongoose.model<ICafeDocument>('Cafe', CafeSchema);
+export default Cafe;

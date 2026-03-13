@@ -8,12 +8,13 @@ import { AuthRequest } from '@/lib/auth/middleware';
 export const GET = withCafeAccess(async (req: AuthRequest, { params }: { params: { slug: string } }) => {
   try {
     await connectDB();
-    const cafe = await Cafe.findOne({ slug: params.slug });
+    const cafe = await Cafe.findOne({ slug: params.slug }).select('-password'); // Exclude password
     if (!cafe) {
       return NextResponse.json({ success: false, message: 'Cafe not found' }, { status: 404 });
     }
     return NextResponse.json({ success: true, data: cafe });
   } catch (e) {
+    console.error('Error fetching cafe:', e);
     return NextResponse.json({ success: false, message: 'Internal server error' }, { status: 500 });
   }
 });
@@ -24,7 +25,7 @@ export const PUT = withCafeAccess(async (req: AuthRequest, { params }: { params:
     await connectDB();
     const body = await req.json();
     // Only allow updating these fields for cafe admins
-    const allowedFields = ['ownerName', 'email', 'city', 'location'];
+    const allowedFields = ['ownerName', 'email', 'city', 'location', 'taxRate'];
     const update: Record<string, any> = {};
     for (const key of allowedFields) {
       if (key in body) update[key] = body[key];
@@ -33,12 +34,13 @@ export const PUT = withCafeAccess(async (req: AuthRequest, { params }: { params:
       { slug: params.slug },
       update,
       { new: true, runValidators: true }
-    );
+    ).select('-password');
     if (!cafe) {
       return NextResponse.json({ success: false, message: 'Cafe not found' }, { status: 404 });
     }
     return NextResponse.json({ success: true, message: 'Changes saved', data: cafe });
   } catch (e) {
+    console.error('Error updating cafe:', e);
     return NextResponse.json({ success: false, message: 'Internal server error' }, { status: 500 });
   }
 });

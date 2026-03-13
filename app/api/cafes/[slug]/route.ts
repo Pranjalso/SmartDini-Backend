@@ -4,6 +4,7 @@ import Cafe from '@/lib/db/models/Cafe';
 import Admin from '@/lib/db/models/Admin';
 import { withAuth } from '@/lib/auth/middleware';
 import { AuthRequest } from '@/lib/auth/middleware';
+import bcrypt from 'bcryptjs';
 
 // Get single cafe
 export const GET = withAuth(async (req: AuthRequest, { params }: { params: { slug: string } }) => {
@@ -46,17 +47,38 @@ export const PUT = withAuth(async (req: AuthRequest, { params }: { params: { slu
       update.endDate = new Date(update.endDate || far.toISOString());
     }
 
+    // Get the existing cafe to check for changes
+    const existingCafe = await Cafe.findOne({ slug: params.slug });
+    if (!existingCafe) {
+      return NextResponse.json(
+        { success: false, message: 'Cafe not found' },
+        { status: 404 }
+      );
+    }
+
+    // Handle password update if provided
+    if (update.password) {
+      const salt = await bcrypt.genSalt(10);
+      update.password = await bcrypt.hash(update.password, salt);
+      update.passwordChangedAt = new Date();
+      update.tokenVersion = (existingCafe.tokenVersion || 0) + 1;
+    }
+
     const cafe = await Cafe.findOneAndUpdate(
       { slug: params.slug },
       update,
       { returnDocument: 'after', runValidators: true }
     );
 
-    if (!cafe) {
-      return NextResponse.json(
-        { success: false, message: 'Cafe not found' },
-        { status: 404 }
-      );
+    // If username, password, or slug changed, update the associated Admin record
+    if (update.username || update.password || update.slug) {
+      const admin = await Admin.findOne({ cafeSlug: params.slug });
+      if (admin) {
+        if (update.username) admin.username = update.username;
+        if (body.password) admin.password = body.password;
+        if (update.slug) admin.cafeSlug = update.slug;
+        await admin.save();
+      }
     }
 
     return NextResponse.json({

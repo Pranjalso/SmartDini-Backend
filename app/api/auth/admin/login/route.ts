@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
         id: admin._id.toString(),
         username: admin.username,
         role: 'superadmin',
+        tokenVersion: admin.tokenVersion ?? 0,
       });
 
       setTokenCookies(token, refreshToken);

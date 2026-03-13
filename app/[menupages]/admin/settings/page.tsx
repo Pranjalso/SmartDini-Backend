@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useParams } from "next/navigation";
-import { useToast, toast, ToastProvider, ToastViewport, Toast, ToastTitle, ToastDescription, ToastClose } from "@/hooks/use-toast";
+import { useToast, ToastProvider, ToastViewport, Toast, ToastTitle, ToastDescription, ToastClose } from "@/hooks/use-toast";
 
 type Cafe = {
   cafeName: string;
@@ -13,6 +13,7 @@ type Cafe = {
   city: string;
   location: string;
   slug: string;
+  taxRate: number;
 };
 
 export default function SettingsPage() {
@@ -27,8 +28,9 @@ export default function SettingsPage() {
     email: "",
     city: "",
     location: "",
+    taxRate: 5.0,
   });
-  const { toasts, dismiss } = useToast();
+  const { toast, toasts, dismiss } = useToast();
 
   useEffect(() => {
     async function load() {
@@ -45,6 +47,7 @@ export default function SettingsPage() {
           email: data.email,
           city: data.city,
           location: data.location,
+          taxRate: data.taxRate || 5.0,
         });
       } catch (e: any) {
         toast({ title: "Failed to load", description: e.message || "Error", variant: "destructive" as any });
@@ -53,7 +56,7 @@ export default function SettingsPage() {
       }
     }
     if (slug) load();
-  }, [slug]);
+  }, [slug, toast]);
 
   const onChange = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm(prev => ({ ...prev, [key]: e.target.value }));
@@ -72,6 +75,7 @@ export default function SettingsPage() {
           email: form.email,
           city: form.city,
           location: form.location,
+          taxRate: Number(form.taxRate),
         }),
       });
       const json = await res.json();
@@ -124,6 +128,36 @@ export default function SettingsPage() {
               <Button disabled={saving} onClick={onSave}>
                 {saving ? 'Saving...' : 'Save Changes'}
               </Button>
+            </div>
+
+            {/* Tax Management Card */}
+            <div className="mt-8 bg-white rounded-xl border p-6 shadow-sm">
+              <h2 className="text-xl font-semibold mb-1">Tax Management</h2>
+              <p className="text-sm text-gray-500 mb-6">Manage how taxes are calculated for your orders.</p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm mb-1 block font-medium text-gray-700">GST / Tax Percentage (%)</label>
+                  <div className="relative">
+                    <Input 
+                      type="number" 
+                      value={form.taxRate} 
+                      onChange={(e) => setForm(prev => ({ ...prev, taxRate: parseFloat(e.target.value) || 0 }))}
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      className="pr-8"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">%</span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">This rate will be applied to the subtotal of every new order.</p>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end">
+                <Button disabled={saving} onClick={onSave}>
+                  {saving ? 'Saving...' : 'Update Tax Rate'}
+                </Button>
+              </div>
             </div>
           </>
         )}

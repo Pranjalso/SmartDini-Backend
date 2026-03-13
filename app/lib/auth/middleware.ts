@@ -100,7 +100,18 @@ export const withCafeAccess = (
 ) => {
   return withAuth(async (req: AuthRequest, ...args: any[]) => {
     const { pathname } = req.nextUrl;
-    const slug = pathname.split('/')[3]; // /api/menu/[slug]
+    
+    // Find slug from path. Supports both /api/menu/[slug] and /api/orders/[slug]
+    const pathParts = pathname.split('/');
+    let slug = '';
+    
+    const menuIndex = pathParts.indexOf('menu');
+    const ordersIndex = pathParts.indexOf('orders');
+    const cafesIndex = pathParts.indexOf('cafes');
+    
+    if (menuIndex !== -1) slug = pathParts[menuIndex + 1];
+    else if (ordersIndex !== -1) slug = pathParts[ordersIndex + 1];
+    else if (cafesIndex !== -1) slug = pathParts[cafesIndex + 1];
 
     if (req.user?.role === 'cafeadmin' && req.user.cafeSlug !== slug) {
       return NextResponse.json(

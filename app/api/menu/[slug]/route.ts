@@ -4,66 +4,38 @@ import MenuItem from '@/lib/db/models/MenuItem';
 import { withAuth, withCafeAccess } from '@/lib/auth/middleware';
 import { AuthRequest } from '@/lib/auth/middleware';
 import { deleteFromCloudinary, extractPublicId } from '@/lib/cloudinary/config';
+import { getMenuItems } from '@/lib/db/menu';
 
-// Get all menu items for a cafe
-export const GET = async (
+// Get all menu items for a cafe (Public)
+export async function GET(
   req: NextRequest,
   { params }: { params: { slug: string } }
-) => {
+) {
   try {
-    await connectDB();
-
+    const { slug } = await params;
     const { searchParams } = req.nextUrl;
-    const category = searchParams.get('category');
+    const category = searchParams.get('category') || undefined;
     const idsParam = searchParams.get('ids');
 
-    let query: any = { cafeSlug: params.slug };
-    
-    if (category) {
-      query.category = category;
-    }
-
-    // If specific IDs are requested, return only those (preserve input order)
+    let ids: string[] | undefined = undefined;
     if (idsParam) {
-      const ids = idsParam
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean);
-
-      if (ids.length === 0) {
-        return NextResponse.json({ success: true, data: [] });
-      }
-
-      const items = await MenuItem.find({
-        cafeSlug: params.slug,
-        _id: { $in: ids },
-      });
-
-      const byId = new Map(items.map(i => [String(i._id), i]));
-      const ordered = ids
-        .map(id => byId.get(id))
-        .filter(Boolean);
-
-      return NextResponse.json({
-        success: true,
-        data: ordered,
-      });
+      ids = idsParam.split(',').map(s => s.trim()).filter(Boolean);
     }
 
-    const menuItems = await MenuItem.find(query).sort({ category: 1, name: 1 });
+    const data = await getMenuItems(slug, category, ids);
 
     return NextResponse.json({
       success: true,
-      data: menuItems,
+      data,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching menu items:', error);
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      { success: false, message: error.message || 'Internal server error' },
       { status: 500 }
     );
   }
-};
+}
 
 // Create menu item (cafe admin only)
 export const POST = withCafeAccess(async (
@@ -133,6 +105,22 @@ export const PUT = withCafeAccess(async (
 
     const body = await req.json();
     const current = await MenuItem.findOne({ _id: itemId, cafeSlug: params.slug });
+
+    if (body?.name) {
+      // Check if item with same name exists (excluding current item)
+      const existingItem = await MenuItem.findOne({
+        cafeSlug: params.slug,
+        name: body.name,
+        _id: { $ne: itemId },
+      });
+
+      if (existingItem) {
+        return NextResponse.json(
+          { success: false, message: 'Item with this name already exists' },
+          { status: 400 }
+        );
+      }
+    }
 
     const menuItem = await MenuItem.findOneAndUpdate(
       { _id: itemId, cafeSlug: params.slug },
