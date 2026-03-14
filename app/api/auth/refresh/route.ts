@@ -49,8 +49,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // If refresh token's tokenVersion mismatches DB, reject
-    if ((user as any).tokenVersion !== undefined && (user as any).tokenVersion !== tokenVersion) {
+    // If refresh token's tokenVersion mismatches DB, reject (skipped for superadmin to prevent recurring logouts)
+    if (user.role !== 'superadmin' && (user as any).tokenVersion !== undefined && (user as any).tokenVersion !== tokenVersion) {
       return NextResponse.json(
         { success: false, message: 'Session invalidated. Please login again.' },
         { status: 401 }

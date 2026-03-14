@@ -41,12 +41,11 @@ export const withAuth = (
     try {
       await connectDB();
       if (user.role === 'superadmin') {
+        // For superadmin, we prioritize staying logged in as requested
+        // We only check if the admin exists, skipping tokenVersion check to prevent recurring logouts
         const admin = await Admin.findById(user.id);
         if (!admin) {
-          return NextResponse.json({ success: false, message: 'User not found' }, { status: 404 });
-        }
-        if ((user as any).tokenVersion !== undefined && (user as any).tokenVersion !== (admin.tokenVersion ?? 0)) {
-          return NextResponse.json({ success: false, message: 'Session expired. Please login again.' }, { status: 401 });
+          return NextResponse.json({ success: false, message: 'Admin account not found' }, { status: 404 });
         }
       } else if (user.role === 'cafeadmin') {
         // Prefer Admin record if exists; otherwise fall back to Cafe

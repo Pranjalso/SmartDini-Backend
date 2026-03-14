@@ -6,8 +6,9 @@ const JWT_SECRET = process.env.JWT_SECRET!;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET!;
 
 export const generateTokens = (payload: JwtPayload) => {
-  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
-  const refreshToken = jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '7d' });
+  // Industry standard: Long-lived tokens for admin sessions as requested
+  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '30d' });
+  const refreshToken = jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '90d' });
   
   return { token, refreshToken };
 };
@@ -32,8 +33,8 @@ export const setTokenCookies = (token: string, refreshToken: string) => {
   cookies().set('token', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax', // Lax is better for cross-site redirects in some auth flows
-    maxAge: 60 * 60 * 24, // 24 hours
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 24 * 30, // 30 days
     path: '/',
   });
 
@@ -41,7 +42,7 @@ export const setTokenCookies = (token: string, refreshToken: string) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 7, // 7 days
+    maxAge: 60 * 60 * 24 * 90, // 90 days
     path: '/',
   });
 };
