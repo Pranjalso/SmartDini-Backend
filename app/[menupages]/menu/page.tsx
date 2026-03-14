@@ -5,22 +5,30 @@ import connectDB from "@/lib/db/connect";
 import Cafe from "@/lib/db/models/Cafe";
 
 type PageProps = {
-  params: Promise<{ menupages: string }>
+  params: { menupages: string }
 }
 
 // This is a Server Component (no 'use client' directive)
 export default async function MenuPage({ params }: PageProps) {
-  const { menupages } = await params;
+  const { menupages } = params;
+
+  console.log('MenuPage loading for slug:', menupages);
 
   // Check if cafe exists and is active
   try {
     await connectDB();
     const cafe = await Cafe.findOne({ slug: menupages }).select('slug cafeName isActive endDate subscriptionPlan');
     
+    if (!cafe) {
+      console.error(`Cafe with slug "${menupages}" not found in database.`);
+      notFound();
+    }
+    
     // Check if subscription has expired
-    const isExpired = cafe && cafe.subscriptionPlan !== 'Lifetime' && new Date(cafe.endDate) < new Date();
+    const isExpired = cafe.subscriptionPlan !== 'Lifetime' && new Date(cafe.endDate) < new Date();
 
-    if (!cafe || !cafe.isActive || isExpired) {
+    if (!cafe.isActive || isExpired) {
+      console.warn(`Cafe "${menupages}" is inactive or expired. isActive: ${cafe.isActive}, isExpired: ${isExpired}`);
       notFound();
     }
     

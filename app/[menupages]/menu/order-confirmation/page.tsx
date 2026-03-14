@@ -7,7 +7,7 @@ import { Suspense } from "react";
 
 // For Next.js 15, we need to handle params as a Promise
 type PageProps = {
-  params: Promise<{ menupages: string }>
+  params: { menupages: string }
 }
 
 function OrderConfirmationContent({ menupages }: { menupages: string }) {
@@ -74,8 +74,8 @@ function OrderConfirmationContent({ menupages }: { menupages: string }) {
   );
 }
 
-export default async function OrderConfirmationPage({ params }: PageProps) {
-  const { menupages } = await params;
+export default function OrderConfirmationPage({ params }: PageProps) {
+  const { menupages } = params;
   
   return (
     <Suspense fallback={

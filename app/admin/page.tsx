@@ -254,8 +254,13 @@ export default function SuperAdmin() {
   // Auto-refresh session logic
   useEffect(() => {
     const refreshSession = async () => {
+      // Use production URL if in production, otherwise relative path
+      const refreshUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://smartdini-seven.vercel.app/api/auth/refresh' 
+        : '/api/auth/refresh';
+        
       try {
-        const res = await fetch('/api/auth/refresh', {
+        const res = await fetch(refreshUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',

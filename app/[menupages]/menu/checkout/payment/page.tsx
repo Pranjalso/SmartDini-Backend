@@ -9,11 +9,11 @@ type PaymentMethod = "upi" | "cash";
 
 // For Next.js 15, we need to handle params as a Promise
 type PageProps = {
-  params: Promise<{ menupages: string }>
+  params: { menupages: string }
 }
 
-export default async function PaymentPage({ params }: PageProps) {
-  const { menupages } = await params;
+export default function CheckoutPaymentPage({ params }: PageProps) {
+  const { menupages } = params;
   return <PaymentPageContent menupages={menupages} />;
 }
 

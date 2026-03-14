@@ -172,9 +172,11 @@ export const POST = withAuth(async (req: AuthRequest) => {
       session.endSession();
     }
 
-    // Prepare base URL for links
+    // Prepare base URL for links - Use production URL if available
+    const productionUrl = 'https://smartdini-seven.vercel.app';
     const baseUrl =
       process.env.NEXT_PUBLIC_APP_URL ||
+      productionUrl ||
       req.nextUrl?.origin ||
       `${req.headers.get('x-forwarded-proto') || 'http'}://${req.headers.get('host')}`;
 
