@@ -10,7 +10,7 @@ export async function GET(
   try {
     await connectDB();
 
-    const cafe = await Cafe.findOne({ slug: params.slug }).select('slug cafeName isActive endDate subscriptionPlan taxRate');
+    const cafe = await Cafe.findOne({ slug: params.slug }).select('slug cafeName isActive endDate subscriptionPlan taxRate showTax');
 
     if (!cafe) {
       return NextResponse.json(
@@ -31,7 +31,8 @@ export async function GET(
         isActive: cafe.isActive && !isExpired,
         isManuallyDeactivated: !cafe.isActive,
         isExpired,
-        taxRate: cafe.taxRate ?? 5.0,
+        taxRate: typeof cafe.taxRate === 'number' ? cafe.taxRate : 0,
+        showTax: typeof cafe.showTax === 'boolean' ? cafe.showTax : false,
       },
     });
   } catch (error) {

@@ -19,20 +19,33 @@ export default function CheckoutPage() {
   const router = useRouter();
   const menupages = params?.menupages as string;
   const [lines, setLines] = useState<CartLine[]>([]);
-  const [tableNumber, setTableNumber] = useState("1");
+  const [tableNumber, setTableNumber] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "upi">("upi");
   const [submitting, setSubmitting] = useState(false);
   const [successOrder, setSuccessOrder] = useState<{ orderNumber: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [taxRate, setTaxRate] = useState(5.0);
+  const [isLoading, setIsLoading] = useState(false); // Default to false to show static/cached data
+  const [taxRate, setTaxRate] = useState(0);
+  const [showTax, setShowTax] = useState<boolean | null>(null); // null means not yet loaded
 
-  // Load cart data from localStorage
+  // --- PERFORMANCE OPTIMIZATION: LOAD CACHED CAFE SETTINGS ---
+  useEffect(() => {
+    if (!menupages) return;
+    try {
+      const cached = window.sessionStorage.getItem(`sd:cafeSettings:${menupages}`);
+      if (cached) {
+        const { taxRate: tr, showTax: st } = JSON.parse(cached);
+        if (tr !== undefined) setTaxRate(tr);
+        if (st !== undefined) setShowTax(st);
+      }
+    } catch {}
+  }, [menupages]);
+
+  // Load cart data from localStorage and sync with session cache
   useEffect(() => {
     if (!menupages) return;
     
     let isMounted = true;
-    setIsLoading(true);
     
     const loadCart = async () => {
       try {
@@ -41,7 +54,6 @@ export default function CheckoutPage() {
         if (!rawCart) {
           if (isMounted) {
             setLines([]);
-            setIsLoading(false);
           }
           return;
         }
@@ -52,12 +64,38 @@ export default function CheckoutPage() {
         if (entries.length === 0) {
           if (isMounted) {
             setLines([]);
-            setIsLoading(false);
           }
           return;
         }
+
+        // --- PERFORMANCE OPTIMIZATION: USE SESSION CACHE FIRST ---
+        const rawCatalog = window.sessionStorage.getItem(`sd:items:${menupages}`);
+        const catalog: any[] = rawCatalog ? JSON.parse(rawCatalog) : [];
         
-        // Fetch all items that are in the cart
+        const cachedLines: CartLine[] = entries.map(([id, qty]) => {
+          const item = catalog.find(c => String(c.id) === String(id));
+          if (item) {
+            return {
+              id: String(item.id),
+              name: item.name,
+              price: item.price,
+              qty: qty,
+              image: item.image,
+              description: item.description,
+            };
+          }
+          return null;
+        }).filter(Boolean) as CartLine[];
+
+        // If we have some cached lines, show them immediately
+        if (cachedLines.length > 0 && isMounted) {
+          setLines(cachedLines);
+        } else if (isMounted) {
+          // Only show loader if we have NO cached data for the items in cart
+          setIsLoading(true);
+        }
+        
+        // --- BACKGROUND REVALIDATION ---
         const ids = entries.map(([id]) => id).join(',');
         const res = await fetch(`/api/menu/${menupages}?ids=${encodeURIComponent(ids)}`, { 
           cache: 'no-store' 
@@ -85,9 +123,6 @@ export default function CheckoutPage() {
         }
       } catch (error) {
         console.error('Error loading cart:', error);
-        if (isMounted) {
-          setLines([]);
-        }
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -107,10 +142,20 @@ export default function CheckoutPage() {
     if (!menupages) return;
     const fetchCafeDetails = async () => {
       try {
-        const res = await fetch(`/api/cafes/${menupages}/public`);
+        const res = await fetch(`/api/cafes/${menupages}/public`, { cache: 'no-store' });
         const json = await res.json();
         if (json?.success && json.data) {
-          setTaxRate(json.data.taxRate ?? 5.0);
+          const newTax = typeof json.data.taxRate === 'number' ? json.data.taxRate : 0;
+          const newShow = typeof json.data.showTax === 'boolean' ? json.data.showTax : false;
+          
+          setTaxRate(newTax);
+          setShowTax(newShow);
+          
+          // Update cache
+          window.sessionStorage.setItem(`sd:cafeSettings:${menupages}`, JSON.stringify({ 
+            taxRate: newTax, 
+            showTax: newShow 
+          }));
         }
       } catch (error) {
         console.error('Error fetching cafe details:', error);
@@ -127,7 +172,10 @@ export default function CheckoutPage() {
       if (raw) {
         const saved = JSON.parse(raw) as { tableNumber?: string; paymentMethod?: "cash" | "upi" };
         if (saved.tableNumber) setTableNumber(saved.tableNumber);
+        else setTableNumber("");
         if (saved.paymentMethod) setPaymentMethod(saved.paymentMethod);
+      } else {
+        setTableNumber("");
       }
     } catch {}
   }, [menupages]);
@@ -144,7 +192,7 @@ export default function CheckoutPage() {
   const uniqueItemsCount = useMemo(() => lines.length, [lines]);
   const totalQuantity = useMemo(() => lines.reduce((sum, l) => sum + l.qty, 0), [lines]);
   const subtotal = useMemo(() => lines.reduce((sum, l) => sum + l.price * l.qty, 0), [lines]);
-  const tax = useMemo(() => Math.round(subtotal * (taxRate / 100)), [subtotal, taxRate]);
+  const tax = useMemo(() => (showTax === true && taxRate > 0) ? Math.round(subtotal * (taxRate / 100)) : 0, [subtotal, taxRate, showTax]);
   const total = useMemo(() => subtotal + tax, [subtotal, tax]);
 
   const updateQuantity = useCallback((itemId: string, change: number) => {
@@ -277,6 +325,32 @@ export default function CheckoutPage() {
             </div>
           ) : lines.length > 0 && !successOrder ? (
             <>
+              <div className="bg-gray-50 rounded-xl p-4" id="table-number-section">
+                <h2 className="font-semibold mb-3">
+                  Table Number <span className="text-red-500">*</span>
+                </h2>
+                <div className="space-y-2">
+                  <input
+                    id="table-number"
+                    type="text"
+                    placeholder="Enter your table no."
+                    value={tableNumber}
+                    onChange={(e) => {
+                      setTableNumber(e.target.value);
+                      if (error) setError("");
+                    }}
+                    className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D32F2F]/20 ${
+                      error ? "border-red-500" : "border-gray-300"
+                    }`}
+                    required
+                  />
+                  {error && (
+                    <p className="text-xs text-red-500">⚠️ {error}</p>
+                  )}
+                  <p className="text-xs text-gray-500">eg. 01, 02, 03...</p>
+                </div>
+              </div>
+
               <div className="bg-[#D32F2F]/5 rounded-xl p-3">
                 <p className="text-sm text-gray-600">
                   <span className="font-semibold text-[#D32F2F]">{uniqueItemsCount}</span> different items ·{" "}
@@ -288,8 +362,8 @@ export default function CheckoutPage() {
                 <h2 className="font-semibold mb-3">Order Summary</h2>
                 <div className="space-y-3">
                   {lines.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3 bg-white rounded-lg p-3">
-                      <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0">
+                    <div key={item.id} className="flex items-center gap-2.5 bg-sky-50 rounded-xl p-1.5 shadow-[0_4px_12px_rgba(59,130,246,0.12)] border border-sky-100">
+                      <div className="w-11 h-11 rounded-md overflow-hidden flex-shrink-0 bg-white">
                         <img
                           src={item.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100&h=100&fit=crop"}
                           alt={item.name}
@@ -300,12 +374,11 @@ export default function CheckoutPage() {
                         />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-sm truncate">{item.name}</h3>
-                        <p className="text-xs text-gray-500 truncate">{item.description || ""}</p>
-                        <div className="flex items-center justify-between mt-2">
+                        <h3 className="font-bold text-xs truncate text-gray-800">{item.name}</h3>
+                        <div className="flex items-center justify-between mt-0.5">
                           <div>
-                            <p className="font-semibold text-[#D32F2F]">₹{item.price * item.qty}</p>
-                            <p className="text-xs text-gray-500">₹{item.price} each</p>
+                            <p className="font-bold text-xs text-brand-red">₹{item.price * item.qty}</p>
+                            <p className="text-[10px] text-gray-500 font-medium">₹{item.price} * {item.qty}</p>
                           </div>
                           <div className="flex items-center gap-2">
                             <button
@@ -344,10 +417,12 @@ export default function CheckoutPage() {
                   </span>
                   <span className="font-medium">₹{subtotal}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Tax ({taxRate}%)</span>
-                  <span className="font-medium">₹{tax}</span>
-                </div>
+                {showTax === true && taxRate > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Tax ({taxRate}%)</span>
+                    <span className="font-medium">₹{tax}</span>
+                  </div>
+                )}
                 <div className="border-t pt-2 mt-2">
                   <div className="flex justify-between font-semibold">
                     <span>Total</span>
@@ -356,32 +431,6 @@ export default function CheckoutPage() {
                 </div>
               </div>
             </div>
-
-              <div className="bg-gray-50 rounded-xl p-4" id="table-number-section">
-                <h2 className="font-semibold mb-3">
-                  Table Number <span className="text-red-500">*</span>
-                </h2>
-                <div className="space-y-2">
-                  <input
-                    id="table-number"
-                    type="text"
-                    placeholder="Enter your table no."
-                    value={tableNumber}
-                    onChange={(e) => {
-                      setTableNumber(e.target.value);
-                      if (error) setError("");
-                    }}
-                    className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D32F2F]/20 ${
-                      error ? "border-red-500" : "border-gray-300"
-                    }`}
-                    required
-                  />
-                  {error && (
-                    <p className="text-xs text-red-500">⚠️ {error}</p>
-                  )}
-                  <p className="text-xs text-gray-500">eg. 01, 02, 03...</p>
-                </div>
-              </div>
 
               {error && (
                 <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">

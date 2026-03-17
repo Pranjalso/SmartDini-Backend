@@ -84,7 +84,7 @@ export const POST = withAuth(async (req: AuthRequest) => {
       subscriptionPlan: z.enum(['Demo (1 Day)', 'Demo (7 Days)', '1 Month', '3 Months', '6 Months', '12 Months', 'Lifetime']),
       startDate: z.string().min(1),
       endDate: z.string().min(1),
-      taxRate: z.number().min(0).max(100).optional(),
+      contactNumber: z.string().min(1),
       username: z.string().min(3),
       password: z.string().min(6),
     });
@@ -142,7 +142,7 @@ export const POST = withAuth(async (req: AuthRequest) => {
         city: parsed.city,
         location: parsed.location,
         subscriptionPlan: parsed.subscriptionPlan,
-        taxRate: parsed.taxRate ?? 5.0,
+        contactNumber: parsed.contactNumber,
         startDate: new Date(parsed.startDate),
         endDate: new Date(parsed.endDate),
         slug,

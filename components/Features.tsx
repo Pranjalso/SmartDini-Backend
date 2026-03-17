@@ -106,8 +106,8 @@ const Features = () => {
                     Watermark
                   </div>
                 )}
-                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
-                  <feature.icon className="h-6 w-6 text-primary" />
+                <div className="w-12 h-12 bg-brand-red rounded-lg flex items-center justify-center mb-4">
+                  <feature.icon className="h-6 w-6 text-white" />
                 </div>
                 <h4 className="text-xl font-semibold mb-3">{feature.title}</h4>
                 <p className="text-muted-foreground">{feature.description}</p>
@@ -131,11 +131,11 @@ const Features = () => {
                 style={{animationDelay: `${index * 0.1}s`}}
               >
                 {feature.premium && (
-                  <div className="absolute top-4 right-4 bg-gradient-to-r from-brand-red to-orange-500 text-white px-3 py-1 rounded-full text-xs font-medium shadow-sm">
+                  <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-medium shadow-sm">
                     Premium
                   </div>
                 )}
-                <div className="w-12 h-12 bg-gradient-to-br from-brand-red to-orange-500 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 shadow-md">
+                <div className="w-12 h-12 bg-brand-red rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 shadow-md">
                   <feature.icon className="h-6 w-6 text-white" />
                 </div>
                 <h4 className="text-xl font-semibold mb-3 group-hover:text-brand-red transition-colors duration-300">{feature.title}</h4>
@@ -182,7 +182,7 @@ const Features = () => {
                 <div className="text-4xl mb-4 animate-pulse">🚀</div>
                 <h4 className="text-xl font-semibold mb-2">Ready to upgrade?</h4>
                 <p className="text-muted-foreground mb-4">Start with basic features or go premium from day one</p>
-                <button className="bg-gradient-to-r from-brand-red to-orange-500 hover:from-brand-red/90 hover:to-orange-600 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-300 hover:shadow-lg hover:scale-105 active:scale-95">
+                <button className="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-300 hover:shadow-lg hover:scale-105 active:scale-95">
                   Explore All Features
                 </button>
               </div>

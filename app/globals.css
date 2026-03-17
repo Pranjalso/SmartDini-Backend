@@ -119,7 +119,7 @@
 /* Custom Font */
 @font-face {
   font-family: 'ValleyZabira';
-  src: url('/fonts/ValleyZabiraDemo-Jpv47.ttf') format('truetype');
+  src: url('../fonts/ValleyZabiraDemo-Jpv47.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;

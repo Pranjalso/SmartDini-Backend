@@ -39,10 +39,10 @@ const metricsConfig = [
   },
   {
     label: "New Orders",
-    icon: Bell, // Changed icon to Bell for New Orders
+    icon: Bell,
     bgIcon: "bg-orange-100",
     colorIcon: "text-orange-600",
-    key: "pending", // Changed key to pending for New Orders
+    key: "pending",
   },
   {
     label: "Completed Orders",
@@ -52,6 +52,58 @@ const metricsConfig = [
     key: "completed",
   },
 ];
+
+// Dashboard Skeleton Loader
+const DashboardSkeleton = () => {
+  return (
+    <div className="bg-white rounded-3xl shadow-sm p-4 sm:p-6 border border-gray-100 w-full">
+      {/* Header Skeleton */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-4">
+        <div className="h-8 w-48 bg-gray-200 rounded animate-pulse"></div>
+        <div className="flex items-center gap-2">
+          <div className="h-10 w-32 bg-gray-200 rounded-lg animate-pulse"></div>
+          <div className="h-10 w-32 bg-gray-200 rounded-lg animate-pulse"></div>
+        </div>
+      </div>
+
+      {/* Metrics Cards Skeleton */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="bg-[#F3F4F6] rounded-xl sm:rounded-2xl p-4 sm:p-5">
+            <div className="flex items-center justify-between">
+              <div className="space-y-2">
+                <div className="h-4 w-24 bg-gray-300 rounded animate-pulse"></div>
+                <div className="h-8 w-16 bg-gray-300 rounded animate-pulse"></div>
+              </div>
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gray-300 animate-pulse"></div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Chart Skeleton */}
+      <div className="bg-[#F3F4F6] rounded-xl sm:rounded-2xl p-4 sm:p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="h-6 w-40 bg-gray-300 rounded animate-pulse"></div>
+          <div className="h-6 w-24 bg-gray-300 rounded-full animate-pulse"></div>
+        </div>
+        <div className="h-[300px] bg-gray-200 rounded-lg animate-pulse relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        .animate-shimmer {
+          animation: shimmer 2s infinite;
+        }
+      `}</style>
+    </div>
+  );
+};
 
 export default function DashboardPage() {
   const params = useParams();
@@ -80,6 +132,8 @@ export default function DashboardPage() {
       let url = `/api/orders/${slug}/stats?period=${period}`;
       if (period === "custom") {
         url += `&date=${selectedDate}`;
+      } else if (period === "overall") {
+        // No date constraints for overall
       }
       
       const res = await fetch(url);
@@ -137,6 +191,7 @@ export default function DashboardPage() {
     if (period === "yesterday") return "Yesterday";
     if (period === "7d") return "Last 7 Days";
     if (period === "30d") return "Last 30 Days";
+    if (period === "overall") return "Overall";
     if (period === "custom") {
       return selectedDate || "Custom Date";
     }
@@ -155,6 +210,10 @@ export default function DashboardPage() {
     ...point,
     growth: Math.min(100, Math.max(10, (point.orders / (stats.total || 1)) * 100))
   }));
+
+  if (loading && !chartData.length && stats.total === 0) {
+    return <DashboardSkeleton />;
+  }
 
   return (
     <div className="bg-white rounded-3xl shadow-sm p-4 sm:p-6 border border-gray-100 w-full">
@@ -202,6 +261,7 @@ export default function DashboardPage() {
                   { value: "yesterday", label: "Yesterday" },
                   { value: "7d", label: "Last 7 Days" },
                   { value: "30d", label: "Last 30 Days" },
+                  { value: "overall", label: "Overall" },
                 ].map((option) => (
                   <button
                     key={option.value}

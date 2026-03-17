@@ -2,7 +2,7 @@
 
 import { useState, useRef, ChangeEvent, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { UtensilsCrossed, Image as ImageIcon, Pencil, Trash2, Check, X, ChevronDown, UploadCloud, Plus, Tag } from "lucide-react";
+import { UtensilsCrossed, Image as ImageIcon, Pencil, Trash2, Check, X, ChevronDown, UploadCloud, Plus, Tag, Loader2 } from "lucide-react";
 
 type MenuItem = {
   id: string;
@@ -40,12 +40,57 @@ const getUnsplashImage = (name: string): string => {
   return "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=200&h=200&fit=crop&auto=format";
 };
 
+// Skeleton Loader Component for Menu Items
+const MenuItemsSkeleton = () => {
+  return (
+    <div className="bg-[#F3F4F6] rounded-xl sm:rounded-2xl p-1 overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[750px]">
+          <thead>
+            <tr className="bg-[#EFA5AA]"> 
+              <th className="py-2 sm:py-3 px-3 sm:px-6 text-left text-xs sm:text-sm font-bold text-[#7f1d1d]">Item</th>
+              <th className="py-2 sm:py-3 px-3 sm:px-6 text-center text-xs sm:text-sm font-bold text-[#7f1d1d]">Price</th>
+              <th className="py-2 sm:py-3 px-3 sm:px-6 text-center text-xs sm:text-sm font-bold text-[#7f1d1d]">Category</th>
+              <th className="py-2 sm:py-3 px-3 sm:px-6 text-center text-xs sm:text-sm font-bold text-[#7f1d1d]">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white">
+            {[...Array(5)].map((_, index) => (
+              <tr key={`skeleton-${index}`} className="border-b border-gray-100 last:border-0">
+                <td className="py-2 sm:py-3 px-3 sm:px-6">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gray-200 animate-pulse"></div>
+                    <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+                  </div>
+                </td>
+                <td className="py-2 sm:py-3 px-3 sm:px-6 text-center">
+                  <div className="h-4 w-16 mx-auto bg-gray-200 rounded animate-pulse"></div>
+                </td>
+                <td className="py-2 sm:py-3 px-3 sm:px-6 text-center">
+                  <div className="h-6 w-20 mx-auto bg-gray-200 rounded-full animate-pulse"></div>
+                </td>
+                <td className="py-2 sm:py-3 px-3 sm:px-6">
+                  <div className="flex items-center justify-center gap-1 sm:gap-2">
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gray-200 animate-pulse"></div>
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gray-200 animate-pulse"></div>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 export default function ManageMenuPage() {
   const params = useParams();
   const menupages = params?.menupages as string;
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   
@@ -62,7 +107,7 @@ export default function ManageMenuPage() {
   useEffect(() => {
     const fetchData = async () => {
       if (!menupages) return;
-      setLoading(true);
+      setInitialLoading(true);
       setError(null);
       try {
         const [catsRes, itemsRes] = await Promise.all([
@@ -94,7 +139,7 @@ export default function ManageMenuPage() {
       } catch (e: any) {
         setError("Failed to load menu");
       } finally {
-        setLoading(false);
+        setInitialLoading(false);
       }
     };
     fetchData();
@@ -453,7 +498,7 @@ export default function ManageMenuPage() {
               <div className="flex justify-end pt-2">
                 <button
                   onClick={handleAdd}
-                  disabled={!itemName.trim() || !price || !category || !imgFile}
+                  disabled={!itemName.trim() || !price || !category || !imgFile || uploading}
                   className="w-full sm:w-auto bg-[#10B981] hover:bg-[#059669] text-white px-6 sm:px-8 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-bold shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {uploading ? 'Uploading…' : 'Save Item'}
@@ -470,158 +515,163 @@ export default function ManageMenuPage() {
             <UtensilsCrossed size={16} className="text-[#D92632]" />
           </div>
           <h2 className="font-bold text-lg sm:text-xl text-gray-900">Current Menu Items</h2>
+          {initialLoading && !menu.length && <Loader2 size={16} className="animate-spin text-gray-400 ml-2" />}
         </div>
 
-        <div className="bg-[#F3F4F6] rounded-xl sm:rounded-2xl p-1 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[750px]">
-              <thead>
-                <tr className="bg-[#EFA5AA]"> 
-                  <th className="py-2 sm:py-3 px-3 sm:px-6 text-left text-xs sm:text-sm font-bold text-[#7f1d1d]">Item</th>
-                  <th className="py-2 sm:py-3 px-3 sm:px-6 text-center text-xs sm:text-sm font-bold text-[#7f1d1d]">Price</th>
-                  <th className="py-2 sm:py-3 px-3 sm:px-6 text-center text-xs sm:text-sm font-bold text-[#7f1d1d]">Category</th>
-                  <th className="py-2 sm:py-3 px-3 sm:px-6 text-center text-xs sm:text-sm font-bold text-[#7f1d1d]">Actions</th>
-                </tr>
-              </thead>
-              
-              <tbody className="bg-white">
-                {menu.map((item) => (
-                  <tr 
-                    key={item.id} 
-                    className={`border-b border-gray-100 last:border-0 ${item.editing ? 'bg-red-50' : 'hover:bg-gray-50'}`}
-                  >
-                    
-                    <td className="py-2 sm:py-3 px-3 sm:px-6">
-                      <div className="flex items-center gap-2 sm:gap-3">
-                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0 overflow-hidden ring-2 ring-offset-2 ring-[#FEE2E2]">
-                          {item.editing ? (
-                            item.editImageUrl ? (
+        {initialLoading && !menu.length ? (
+          <MenuItemsSkeleton />
+        ) : (
+          <div className="bg-[#F3F4F6] rounded-xl sm:rounded-2xl p-1 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[750px]">
+                <thead>
+                  <tr className="bg-[#EFA5AA]"> 
+                    <th className="py-2 sm:py-3 px-3 sm:px-6 text-left text-xs sm:text-sm font-bold text-[#7f1d1d]">Item</th>
+                    <th className="py-2 sm:py-3 px-3 sm:px-6 text-center text-xs sm:text-sm font-bold text-[#7f1d1d]">Price</th>
+                    <th className="py-2 sm:py-3 px-3 sm:px-6 text-center text-xs sm:text-sm font-bold text-[#7f1d1d]">Category</th>
+                    <th className="py-2 sm:py-3 px-3 sm:px-6 text-center text-xs sm:text-sm font-bold text-[#7f1d1d]">Actions</th>
+                  </tr>
+                </thead>
+                
+                <tbody className="bg-white">
+                  {menu.map((item) => (
+                    <tr 
+                      key={item.id} 
+                      className={`border-b border-gray-100 last:border-0 ${item.editing ? 'bg-red-50' : 'hover:bg-gray-50'}`}
+                    >
+                      
+                      <td className="py-2 sm:py-3 px-3 sm:px-6">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0 overflow-hidden ring-2 ring-offset-2 ring-[#FEE2E2]">
+                            {item.editing ? (
+                              item.editImageUrl ? (
+                                <img 
+                                  src={item.editImageUrl} 
+                                  alt={item.name} 
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).src = getUnsplashImage(item.name);
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-full h-full bg-[#FEE2E2] flex items-center justify-center relative group cursor-pointer">
+                                  <ImageIcon size={14} className="text-[#D92632]" />
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="absolute inset-0 opacity-0 cursor-pointer"
+                                    onChange={(e) => handleEditImageUpload(item.id, e)}
+                                  />
+                                </div>
+                              )
+                            ) : (
                               <img 
-                                src={item.editImageUrl} 
-                                alt={item.name} 
+                                src={transformCloudinary(item.imageUrl, 80, 80)} 
+                                alt={item.name}
                                 className="w-full h-full object-cover"
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).src = getUnsplashImage(item.name);
                                 }}
                               />
-                            ) : (
-                              <div className="w-full h-full bg-[#FEE2E2] flex items-center justify-center relative group cursor-pointer">
-                                <ImageIcon size={14} className="text-[#D92632]" />
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  className="absolute inset-0 opacity-0 cursor-pointer"
-                                  onChange={(e) => handleEditImageUpload(item.id, e)}
-                                />
-                              </div>
-                            )
-                          ) : (
-                            <img 
-                              src={transformCloudinary(item.imageUrl, 80, 80)} 
-                              alt={item.name}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = getUnsplashImage(item.name);
-                              }}
+                            )}
+                          </div>
+                          
+                          {item.editing ? (
+                            <input 
+                              value={item.editName}
+                              onChange={(e) => updateEditField(item.id, 'editName', e.target.value)}
+                              className="w-full border border-red-300 rounded px-2 py-1 text-xs outline-none text-[#D92632]"
+                              placeholder="Item name"
                             />
+                          ) : (
+                            <span className="text-xs sm:text-sm font-semibold text-gray-800">
+                              {item.name}
+                            </span>
                           )}
                         </div>
-                        
+                      </td>
+
+                      <td className="py-2 sm:py-3 px-3 sm:px-6 text-center">
                         {item.editing ? (
                           <input 
-                            value={item.editName}
-                            onChange={(e) => updateEditField(item.id, 'editName', e.target.value)}
-                            className="w-full border border-red-300 rounded px-2 py-1 text-xs outline-none text-[#D92632]"
-                            placeholder="Item name"
+                            type="number"
+                            value={item.editPrice}
+                            onChange={(e) => updateEditField(item.id, 'editPrice', Number(e.target.value))}
+                            className="w-16 sm:w-20 mx-auto border border-red-300 rounded px-2 py-1 text-xs text-center outline-none text-[#D92632]"
+                            placeholder="Price"
                           />
                         ) : (
-                          <span className="text-xs sm:text-sm font-semibold text-gray-800">
-                            {item.name}
+                          <span className="text-xs sm:text-sm font-medium text-gray-600">₹{item.price}</span>
+                        )}
+                      </td>
+
+                      <td className="py-2 sm:py-3 px-3 sm:px-6 text-center">
+                        {item.editing ? (
+                           <div className="relative w-24 sm:w-32 mx-auto">
+                             <select
+                               value={item.editCategory}
+                               onChange={(e) => updateEditField(item.id, 'editCategory', e.target.value)}
+                               className="w-full border border-red-300 rounded px-2 py-1 text-xs outline-none text-[#D92632] appearance-none"
+                             >
+                               {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                             </select>
+                             <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                           </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 sm:px-3 py-1 rounded-full bg-gray-100 text-[10px] sm:text-xs font-bold text-gray-600">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1"></span>
+                            {item.category}
                           </span>
                         )}
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="py-2 sm:py-3 px-3 sm:px-6 text-center">
-                      {item.editing ? (
-                        <input 
-                          type="number"
-                          value={item.editPrice}
-                          onChange={(e) => updateEditField(item.id, 'editPrice', Number(e.target.value))}
-                          className="w-16 sm:w-20 mx-auto border border-red-300 rounded px-2 py-1 text-xs text-center outline-none text-[#D92632]"
-                          placeholder="Price"
-                        />
-                      ) : (
-                        <span className="text-xs sm:text-sm font-medium text-gray-600">₹{item.price}</span>
-                      )}
-                    </td>
+                      <td className="py-2 sm:py-3 px-3 sm:px-6">
+                        <div className="flex items-center justify-center gap-1 sm:gap-2">
+                          {item.editing ? (
+                            <>
+                              <button 
+                                onClick={() => onSaveEdit(item.id)}
+                                className="bg-[#10B981] text-white px-2 sm:px-3 py-1 rounded text-[10px] sm:text-xs font-bold hover:bg-[#059669] transition-colors whitespace-nowrap"
+                                title="Save changes"
+                              >
+                                Save
+                              </button>
+                              <button 
+                                onClick={() => cancelEdit(item.id)}
+                                className="bg-[#EF4444] text-white px-2 sm:px-3 py-1 rounded text-[10px] sm:text-xs font-bold hover:bg-[#DC2626] transition-colors whitespace-nowrap"
+                                title="Cancel editing"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button 
+                                onClick={() => startEdit(item.id)}
+                                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#D1FAE5] text-[#10B981] flex items-center justify-center hover:bg-[#A7F3D0] transition-colors"
+                                title="Edit item"
+                              >
+                                <Pencil size={12} strokeWidth={2.5} />
+                              </button>
+                              <button 
+                                onClick={() => onDelete(item.id)}
+                                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#FEE2E2] text-[#EF4444] flex items-center justify-center hover:bg-[#FECACA] transition-colors"
+                                title="Delete item"
+                              >
+                                <Trash2 size={12} strokeWidth={2.5} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
 
-                    <td className="py-2 sm:py-3 px-3 sm:px-6 text-center">
-                      {item.editing ? (
-                         <div className="relative w-24 sm:w-32 mx-auto">
-                           <select
-                             value={item.editCategory}
-                             onChange={(e) => updateEditField(item.id, 'editCategory', e.target.value)}
-                             className="w-full border border-red-300 rounded px-2 py-1 text-xs outline-none text-[#D92632] appearance-none"
-                           >
-                             {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                           </select>
-                           <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                         </div>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 sm:px-3 py-1 rounded-full bg-gray-100 text-[10px] sm:text-xs font-bold text-gray-600">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1"></span>
-                          {item.category}
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="py-2 sm:py-3 px-3 sm:px-6">
-                      <div className="flex items-center justify-center gap-1 sm:gap-2">
-                        {item.editing ? (
-                          <>
-                            <button 
-                              onClick={() => onSaveEdit(item.id)}
-                              className="bg-[#10B981] text-white px-2 sm:px-3 py-1 rounded text-[10px] sm:text-xs font-bold hover:bg-[#059669] transition-colors whitespace-nowrap"
-                              title="Save changes"
-                            >
-                              Save
-                            </button>
-                            <button 
-                              onClick={() => cancelEdit(item.id)}
-                              className="bg-[#EF4444] text-white px-2 sm:px-3 py-1 rounded text-[10px] sm:text-xs font-bold hover:bg-[#DC2626] transition-colors whitespace-nowrap"
-                              title="Cancel editing"
-                            >
-                              Cancel
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button 
-                              onClick={() => startEdit(item.id)}
-                              className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#D1FAE5] text-[#10B981] flex items-center justify-center hover:bg-[#A7F3D0] transition-colors"
-                              title="Edit item"
-                            >
-                              <Pencil size={12} strokeWidth={2.5} />
-                            </button>
-                            <button 
-                              onClick={() => onDelete(item.id)}
-                              className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#FEE2E2] text-[#EF4444] flex items-center justify-center hover:bg-[#FECACA] transition-colors"
-                              title="Delete item"
-                            >
-                              <Trash2 size={12} strokeWidth={2.5} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       <style jsx>{`

@@ -15,7 +15,9 @@ export interface ICafeDocument extends Document {
   isActive: boolean;
   tokenVersion?: number;
   passwordChangedAt?: Date;
+  contactNumber: string;
   taxRate: number;
+  showTax: boolean;
 }
 
 const CafeSchema = new Schema<ICafeDocument>(
@@ -88,11 +90,18 @@ const CafeSchema = new Schema<ICafeDocument>(
       type: Date,
       default: () => new Date(),
     },
+    contactNumber: {
+      type: String,
+      required: [true, 'Contact number is required'],
+      trim: true,
+    },
     taxRate: {
       type: Number,
-      default: 5.0,
-      min: [0, 'Tax rate cannot be negative'],
-      max: [100, 'Tax rate cannot exceed 100%'],
+      default: 0,
+    },
+    showTax: {
+      type: Boolean,
+      default: true,
     },
   },
   {

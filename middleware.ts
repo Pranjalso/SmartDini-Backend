@@ -4,64 +4,50 @@ import type { NextRequest } from 'next/server';
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get('token')?.value;
-  if (pathname === '/admin' || pathname.startsWith('/admin/')) {
+  const segments = pathname.split('/').filter(Boolean);
+
+  // Rule 1: Handle /admin and /admin/* routes
+  if (segments[0] === 'admin') {
     if (!token) {
-      const url = req.nextUrl.clone();
-      url.pathname = '/adminlogin';
-      url.search = '';
-      return NextResponse.redirect(url);
+      return NextResponse.redirect(new URL('/adminlogin', req.url));
     }
     try {
-      const part = token.split('.')[1] || '';
-      const base64 = part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '=');
-      const json = typeof atob === 'function' ? atob(base64) : Buffer.from(base64, 'base64').toString();
-      const payload = JSON.parse(json);
-      const role = payload?.role;
-      if (role !== 'superadmin') {
-        const url = req.nextUrl.clone();
-        url.pathname = '/adminlogin';
-        url.search = '';
-        return NextResponse.redirect(url);
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      // Only superadmin can access /admin routes
+      if (payload?.role === 'superadmin') {
+        return NextResponse.next();
       }
+      // All others are redirected
+      return NextResponse.redirect(new URL('/adminlogin', req.url));
     } catch {
-      const url = req.nextUrl.clone();
-      url.pathname = '/adminlogin';
-      url.search = '';
-      return NextResponse.redirect(url);
+      // Invalid token
+      return NextResponse.redirect(new URL('/adminlogin', req.url));
     }
   }
-  const match = pathname.match(/^\/([^\/]+)\/admin(\/.*)?$/);
-  if (match) {
-    const slug = match[1];
+
+  // Rule 2: Handle /:slug/admin and /:slug/admin/* routes
+  if (segments.length >= 2 && segments[1] === 'admin') {
+    const slug = segments[0];
     if (!token) {
-      const url = req.nextUrl.clone();
-      url.pathname = `/${slug}/adminlogin`;
-      url.search = '';
-      return NextResponse.redirect(url);
+      return NextResponse.redirect(new URL(`/${slug}/adminlogin`, req.url));
     }
     try {
-      const part = token.split('.')[1] || '';
-      const base64 = part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '=');
-      const json = typeof atob === 'function' ? atob(base64) : Buffer.from(base64, 'base64').toString();
-      const payload = JSON.parse(json);
-      const role = payload?.role;
-      const cafeSlug = payload?.cafeSlug;
-      if (role !== 'cafeadmin' || cafeSlug !== slug) {
-        const url = req.nextUrl.clone();
-        url.pathname = `/${slug}/adminlogin`;
-        url.search = '';
-        return NextResponse.redirect(url);
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      // Allow superadmin OR the correct cafeadmin
+      if (payload?.role === 'superadmin' || (payload?.role === 'cafeadmin' && payload?.cafeSlug === slug)) {
+        return NextResponse.next();
       }
+      // All others are redirected
+      return NextResponse.redirect(new URL(`/${slug}/adminlogin`, req.url));
     } catch {
-      const url = req.nextUrl.clone();
-      url.pathname = `/${slug}/adminlogin`;
-      url.search = '';
-      return NextResponse.redirect(url);
+      // Invalid token
+      return NextResponse.redirect(new URL(`/${slug}/adminlogin`, req.url));
     }
   }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/:menupages/admin/:path*', '/:menupages/admin', '/admin', '/admin/:path*'],
+  matcher: ['/admin', '/admin/:path*', '/:slug/admin', '/:slug/admin/:path*'],
 };

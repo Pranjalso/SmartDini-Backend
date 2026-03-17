@@ -4,9 +4,11 @@ import { useState, useEffect } from "react";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import DemoRequestPopup from "./DemoRequestPopup";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isPopupOpen, setIsPopupOpen] = useState(false);
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
@@ -31,57 +33,58 @@ const Header = () => {
   }, []);
 
   return (
-    <header className="bg-white shadow-lg border-b border-border sticky top-0 z-50">
+    <header className="bg-brand-white border-b border-border sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <div className="flex-shrink-0 z-50">
             <Link href="/">
-              <h1 className="text-3xl text-brand-red smartdiniFont">Smartdini</h1>
+              <h1 className="text-3xl font-bold text-brand-red smartdiniFont tracking-wider">Smartdini</h1>
             </Link>
           </div>
 
-          {/* Desktop Navigation */}
+          {/* Desktop Navigation - Exactly as in image */}
           <nav className="hidden md:flex space-x-8">
             <Link
               href="/#home"
-              className="text-foreground hover:text-primary transition-colors font-medium "
+              className="text-foreground hover:text-primary transition-colors font-medium"
             >
               Home
             </Link>
             <Link
               href="/#features"
-              className="text-foreground hover:text-primary transition-colors font-medium "
+              className="text-foreground hover:text-primary transition-colors font-medium"
             >
               Features
             </Link>
             <Link
               href="/company"
-              className="text-foreground hover:text-primary transition-colors font-medium "
+              className="text-foreground hover:text-primary transition-colors font-medium"
             >
               Company
             </Link>
             <Link
               href="/#pricing"
-              className="text-foreground hover:text-primary transition-colors font-medium "
+              className="text-foreground hover:text-primary transition-colors font-medium"
             >
               Pricing
             </Link>
             <Link
               href="/#contact"
-              className="text-foreground hover:text-primary transition-colors font-medium "
+              className="text-foreground hover:text-primary transition-colors font-medium"
             >
               Contact
             </Link>
           </nav>
 
           {/* Desktop CTA Buttons */}
-          <div className="hidden md:flex space-x-4">
-            <Link href="/#contact">
-              <Button className="bg-primary text-white hover:bg-primary/90 ">
-                Demo
-              </Button>
-            </Link>
+          <div className="hidden md:flex">
+            <Button
+              onClick={() => setIsPopupOpen(true)}
+              className="bg-primary text-white hover:bg-primary/90 px-4 py-1.5 text-sm font-medium rounded"
+            >
+              Demo
+            </Button>
           </div>
 
           {/* Mobile menu button */}
@@ -102,49 +105,54 @@ const Header = () => {
           <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] mt-16 px-4 space-y-6">
             <Link
               href="/#home"
-              className="text-2xl text-foreground hover:text-primary font-medium transition-colors py-3 "
+              className="text-2xl text-foreground hover:text-primary font-medium transition-colors py-3"
               onClick={handleNavClick}
             >
               Home
             </Link>
             <Link
               href="/#features"
-              className="text-2xl text-foreground hover:text-primary font-medium transition-colors py-3 "
+              className="text-2xl text-foreground hover:text-primary font-medium transition-colors py-3"
               onClick={handleNavClick}
             >
               Features
             </Link>
             <Link
               href="/company"
-              className="text-2xl text-foreground hover:text-primary font-medium transition-colors py-3 "
+              className="text-2xl text-foreground hover:text-primary font-medium transition-colors py-3"
               onClick={handleNavClick}
             >
               Company
             </Link>
             <Link
               href="/#pricing"
-              className="text-2xl text-foreground hover:text-primary font-medium transition-colors py-3 "
+              className="text-2xl text-foreground hover:text-primary font-medium transition-colors py-3"
               onClick={handleNavClick}
             >
               Pricing
             </Link>
             <Link
               href="/#contact"
-              className="text-2xl text-foreground hover:text-primary font-medium transition-colors py-3 "
+              className="text-2xl text-foreground hover:text-primary font-medium transition-colors py-3"
               onClick={handleNavClick}
             >
               Contact
             </Link>
             <div className="pt-4 w-full max-w-xs">
-              <Link href="/#contact" onClick={handleNavClick}>
-                <Button className="w-full bg-primary text-white hover:bg-primary/90 text-lg py-4 ">
-                  Request Demo
-                </Button>
-              </Link>
+              <Button
+                onClick={() => {
+                  setIsPopupOpen(true);
+                  handleNavClick();
+                }}
+                className="w-full bg-primary text-white hover:bg-primary/90 text-base py-3 rounded font-medium"
+              >
+                Demo
+              </Button>
             </div>
           </div>
         </div>
       </div>
+      {isPopupOpen && <DemoRequestPopup onClose={() => setIsPopupOpen(false)} />}
     </header>
   );
 };

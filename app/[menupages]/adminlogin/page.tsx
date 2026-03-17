@@ -54,7 +54,14 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
       if (!res.ok || !data.success) {
         throw new Error(data.message || 'Invalid credentials');
       }
-      router.push(`/${menupages}/admin`);
+      // Industry Standard: Use the cafeSlug from the API response for a reliable redirect
+      const redirectSlug = data.user?.cafeSlug;
+      if (redirectSlug) {
+        router.push(`/${redirectSlug}/admin`);
+      } else {
+        // Fallback for safety, though the API should always provide the slug
+        router.push(`/${menupages}/admin`);
+      }
     } catch (err: any) {
       setErrors({ login: err.message || 'Login failed' });
     } finally {

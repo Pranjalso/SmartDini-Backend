@@ -30,7 +30,7 @@ const HowItWorks = () => {
         {/* Section Header */}
         <div className="text-center mb-16 animate-on-scroll">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-            How <span className="text-brand-red pl-1 pr-1"><span className="smartdiniFont">Smartdini</span></span> Works
+            How <span className="text-brand-red pl-1 pr-1 font-bold"><span className="smartdiniFont font-bold">Smartdini</span></span> Works
           </h2>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
             From scan to serve in seconds. Get started with Smartdini today.

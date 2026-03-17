@@ -32,6 +32,126 @@ export function createTransport() {
   });
 }
 
+export async function sendDemoRequestEmail(opts: {
+  cafeName: string;
+  ownerName: string;
+  email: string;
+  city: string;
+  location: string;
+  startDate: string;
+  contactNumber: string;
+}) {
+  const { cafeName, ownerName, email, city, location, startDate, contactNumber } = opts;
+  const transporter = createTransport();
+  const subject = `🚀 New Demo Request - ${cafeName}`;
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>New Demo Request - SmartDini</title>
+      ${emailStyles}
+    </head>
+    <body>
+      <div class="email-card">
+        <div class="email-header">
+          <h1>Smart<span>Dini</span></h1>
+          <p>New Demo Request</p>
+        </div>
+        <div class="email-content">
+          <div class="greeting">
+            New demo request from <span class="greeting-highlight">${ownerName}</span> 👋
+          </div>
+          <div class="message">
+            You've received a new demo request through the SmartDini website.
+            Here are the details:
+          </div>
+          <div class="badge">🚀 New Demo Request</div>
+          <div class="section-card">
+            <div class="section-title">
+              <span class="section-title-icon">📝</span>
+              Submission Details
+            </div>
+            <div class="link-container">
+              <div class="link-label">Cafe Name</div>
+              <div class="link-value">${cafeName}</div>
+            </div>
+            <div class="link-container">
+              <div class="link-label">Owner Name</div>
+              <div class="link-value">${ownerName}</div>
+            </div>
+            <div class="link-container">
+              <div class="link-label">Email Address</div>
+              <div class="link-value">
+                <a href="mailto:${email}">${email}</a>
+              </div>
+            </div>
+            <div class="link-container">
+              <div class="link-label">Contact Number</div>
+              <div class="link-value">${contactNumber}</div>
+            </div>
+            <div class="link-container">
+              <div class="link-label">City</div>
+              <div class="link-value">${city}</div>
+            </div>
+            <div class="link-container">
+              <div class="link-label">Location</div>
+              <div class="link-value">${location}</div>
+            </div>
+            <div class="link-container">
+              <div class="link-label">Proposed Start Date</div>
+              <div class="link-value">${startDate}</div>
+            </div>
+          </div>
+          <div class="button-container">
+            <a href="mailto:${email}" class="button">
+              Reply to ${ownerName} →
+            </a>
+          </div>
+          <div class="divider"></div>
+        </div>
+        <div class="email-footer">
+          <div class="footer-logo">SmartDini</div>
+          <div class="footer-text">
+            <p>SmartDini Admin Notification System</p>
+            <p style="margin-top: 16px;">
+              © ${new Date().getFullYear()} SmartDini. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const text = `
+NEW DEMO REQUEST
+
+Cafe Name: ${cafeName}
+Owner Name: ${ownerName}
+Email: ${email}
+Contact Number: ${contactNumber}
+City: ${city}
+Location: ${location}
+Start Date: ${startDate}
+
+Reply to: ${email}
+
+© ${new Date().getFullYear()} SmartDini. All rights reserved.
+  `;
+
+  await transporter.sendMail({
+    from: `"SmartDini" <${getMailerConfig().from}>`,
+    to: process.env.ADMIN_EMAIL || getMailerConfig().from,
+    subject,
+    html,
+    text,
+    replyTo: email,
+  });
+}
+
 // Professional email styles matching app theme
 const emailStyles = `
   <style>
@@ -666,6 +786,119 @@ Making restaurant menus digital, one cafe at a time.
   });
 }
 
+export async function sendContactFormEmail(opts: {
+  contactNo: string;
+  email: string;
+  cafeLocation: string;
+  cafeCity: string;
+}) {
+  const { contactNo, email, cafeLocation, cafeCity } = opts;
+  const transporter = createTransport();
+  const subject = `📩 New Contact Form Submission - ${email}`;
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>New Inquiry - SmartDini</title>
+      ${emailStyles}
+    </head>
+    <body>
+      <div class="email-card">
+        <div class="email-header">
+          <h1>Smart<span>Dini</span></h1>
+          <p>Contact Form Inquiry</p>
+        </div>
+        
+        <div class="email-content">
+          <div class="greeting">
+            New message from <span class="greeting-highlight">${email}</span> 👋
+          </div>
+          
+          <div class="message">
+            You've received a new inquiry through the SmartDini contact form. 
+            Here are the details:
+          </div>
+          
+          <div class="badge">📬 New Inquiry Received</div>
+          
+          <!-- Inquiry Details Section -->
+          <div class="section-card">
+            <div class="section-title">
+              <span class="section-title-icon">📝</span>
+              Submission Details
+            </div>
+            
+            <div class="link-container">
+              <div class="link-label">Contact Number</div>
+              <div class="link-value">${contactNo}</div>
+            </div>
+            
+            <div class="link-container">
+              <div class="link-label">Email Address</div>
+              <div class="link-value">
+                <a href="mailto:${email}">${email}</a>
+              </div>
+            </div>
+            
+            <div class="link-container">
+              <div class="link-label">Cafe Location</div>
+              <div class="link-value">${cafeLocation}</div>
+            </div>
+
+            <div class="link-container">
+              <div class="link-label">Cafe City</div>
+              <div class="link-value">${cafeCity}</div>
+            </div>
+          </div>
+          
+          <div class="button-container">
+            <a href="mailto:${email}" class="button">
+              Reply to ${email} →
+            </a>
+          </div>
+          
+          <div class="divider"></div>
+        </div>
+        
+        <div class="email-footer">
+          <div class="footer-logo">SmartDini</div>
+          <div class="footer-text">
+            <p>SmartDini Admin Notification System</p>
+            <p style="margin-top: 16px;">
+              © ${new Date().getFullYear()} SmartDini. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+  
+  const text = `
+NEW CONTACT FORM SUBMISSION
+
+Contact Number: ${contactNo}
+Email: ${email}
+Cafe Location: ${cafeLocation}
+Cafe City: ${cafeCity}
+
+Reply to: ${email}
+
+© ${new Date().getFullYear()} SmartDini. All rights reserved.
+  `;
+  
+  await transporter.sendMail({
+    from: `"SmartDini" <${getMailerConfig().from}>`,
+    to: process.env.ADMIN_EMAIL || getMailerConfig().from,
+    subject,
+    html,
+    text,
+    replyTo: email,
+  });
+}
 export async function sendPasswordOtpEmail(opts: { to: string; cafeName: string; otp: string }) {
   const { to, cafeName, otp } = opts;
   const transporter = createTransport();

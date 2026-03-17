@@ -27,7 +27,22 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
   const [tableNumber, setTableNumber] = useState("");
   const [lines, setLines] = useState<Array<{ id: string; name: string; price: number; qty: number; image?: string; description?: string }>>([]);
   const [orderNumber, setOrderNumber] = useState<number | null>(null);
-  const [taxRate, setTaxRate] = useState(5.0);
+  const [taxRate, setTaxRate] = useState(0);
+  const [showTax, setShowTax] = useState<boolean | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // --- PERFORMANCE OPTIMIZATION: LOAD CACHED CAFE SETTINGS ---
+  useEffect(() => {
+    if (!menupages) return;
+    try {
+      const cached = window.sessionStorage.getItem(`sd:cafeSettings:${menupages}`);
+      if (cached) {
+        const { taxRate: tr, showTax: st } = JSON.parse(cached);
+        if (tr !== undefined) setTaxRate(tr);
+        if (st !== undefined) setShowTax(st);
+      }
+    } catch {}
+  }, [menupages]);
 
   // Restore checkout form state and cart lines
   useEffect(() => {
@@ -144,10 +159,20 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
     if (!menupages) return;
     const fetchCafeDetails = async () => {
       try {
-        const res = await fetch(`/api/cafes/${menupages}/public`);
+        const res = await fetch(`/api/cafes/${menupages}/public`, { cache: 'no-store' });
         const json = await res.json();
         if (json?.success && json.data) {
-          setTaxRate(json.data.taxRate ?? 5.0);
+          const newTax = typeof json.data.taxRate === 'number' ? json.data.taxRate : 0;
+          const newShow = typeof json.data.showTax === 'boolean' ? json.data.showTax : false;
+          
+          setTaxRate(newTax);
+          setShowTax(newShow);
+          
+          // Update cache
+          window.sessionStorage.setItem(`sd:cafeSettings:${menupages}`, JSON.stringify({ 
+            taxRate: newTax, 
+            showTax: newShow 
+          }));
         }
       } catch (error) {
         console.error('Error fetching cafe details:', error);
@@ -158,7 +183,7 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
 
   // Derived totals
   const subtotal = useMemo(() => lines.reduce((sum, l) => sum + l.price * l.qty, 0), [lines]);
-  const tax = useMemo(() => Math.round(subtotal * (taxRate / 100)), [subtotal, taxRate]);
+  const tax = useMemo(() => (showTax === true && taxRate > 0) ? Math.round(subtotal * (taxRate / 100)) : 0, [subtotal, taxRate, showTax]);
   const total = useMemo(() => subtotal + tax, [subtotal, tax]);
 
   const handlePayment = async () => {
@@ -275,6 +300,29 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
               className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D32F2F]/20 ${error ? "border-red-500" : "border-gray-300"}`}
               required
             />
+          </div>
+
+          {/* Order Summary / Price Details */}
+          <div className="bg-gray-50 rounded-xl p-4">
+            <h2 className="font-semibold mb-3">Price Details</h2>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Subtotal</span>
+                <span className="font-medium">₹{subtotal}</span>
+              </div>
+              {showTax === true && taxRate > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Tax ({taxRate}%)</span>
+                  <span className="font-medium">₹{tax}</span>
+                </div>
+              )}
+              <div className="border-t pt-2 mt-2">
+                <div className="flex justify-between font-semibold">
+                  <span>Total</span>
+                  <span className="text-[#D32F2F]">₹{total}</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Payment Methods */}

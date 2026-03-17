@@ -51,9 +51,7 @@ export const withAuth = (
         // Prefer Admin record if exists; otherwise fall back to Cafe
         const admin = await Admin.findById(user.id);
         if (admin) {
-          if ((user as any).tokenVersion !== undefined && (user as any).tokenVersion !== (admin.tokenVersion ?? 0)) {
-            return NextResponse.json({ success: false, message: 'Session expired. Please login again.' }, { status: 401 });
-          }
+          // Skipping tokenVersion check to prevent recurring logouts as requested
         } else {
           const cafe = await Cafe.findOne({ username: user.username });
           if (!cafe) {
@@ -62,9 +60,7 @@ export const withAuth = (
           if (!cafe.isActive) {
             return NextResponse.json({ success: false, message: 'Cafe is deactivated' }, { status: 403 });
           }
-          if ((user as any).tokenVersion !== undefined && (user as any).tokenVersion !== (cafe.tokenVersion ?? 0)) {
-            return NextResponse.json({ success: false, message: 'Session expired. Please login again.' }, { status: 401 });
-          }
+          // Skipping tokenVersion check to prevent recurring logouts as requested
         }
       }
     } catch (e) {

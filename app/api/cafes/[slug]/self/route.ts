@@ -25,7 +25,7 @@ export const PUT = withCafeAccess(async (req: AuthRequest, { params }: { params:
     await connectDB();
     const body = await req.json();
     // Only allow updating these fields for cafe admins
-    const allowedFields = ['ownerName', 'email', 'city', 'location', 'taxRate'];
+    const allowedFields = ['ownerName', 'email', 'city', 'location', 'taxRate', 'showTax'];
     const update: Record<string, any> = {};
     for (const key of allowedFields) {
       if (key in body) update[key] = body[key];

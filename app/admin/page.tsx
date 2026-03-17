@@ -166,13 +166,41 @@ const toastStyles = `
 export default function SuperAdmin() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'add' | 'manage'>('add');
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // --- PERFORMANCE OPTIMIZATION: LOAD CACHED DATA ON MOUNT ---
+  useEffect(() => {
+    try {
+      const cachedTab = window.sessionStorage.getItem('sd:admin:activeTab') as 'add' | 'manage';
+      if (cachedTab) setActiveTab(cachedTab);
+
+      const cachedCafes = window.sessionStorage.getItem('sd:admin:cafes');
+      if (cachedCafes) setCafes(JSON.parse(cachedCafes));
+
+      const cachedStats = window.sessionStorage.getItem('sd:admin:stats');
+      if (cachedStats) setStats(JSON.parse(cachedStats));
+    } catch (e) {
+      console.error('Error loading cached admin data:', e);
+    } finally {
+      setIsInitialized(true);
+    }
+  }, []);
+
+  // Persist tab changes
+  const handleTabChange = (tab: 'add' | 'manage') => {
+    setActiveTab(tab);
+    try {
+      window.sessionStorage.setItem('sd:admin:activeTab', tab);
+    } catch {}
+  };
+
   const [saving, setSaving] = useState(false);
   const [cafeName, setCafeName] = useState('');
   const [slug, setSlug] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [plan, setPlan] = useState('demo');
-  const [taxRate, setTaxRate] = useState(5.0);
+  const [contactNumber, setContactNumber] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [menuLink, setMenuLink] = useState('');
   const [adminLink, setAdminLink] = useState('');
@@ -188,7 +216,7 @@ export default function SuperAdmin() {
   const [editLocation, setEditLocation] = useState('');
   const [editPlan, setEditPlan] = useState('1');
   const [editEndDate, setEditEndDate] = useState('');
-  const [editTaxRate, setEditTaxRate] = useState(5.0);
+  const [editContactNumber, setEditContactNumber] = useState('');
   const [editUsername, setEditUsername] = useState('');
   // New state for edit start date
   const [editStartDate, setEditStartDate] = useState('');
@@ -216,7 +244,7 @@ export default function SuperAdmin() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
-  const pageSize = 10;
+  const pageSize = 25;
   const [stats, setStats] = useState<{ total: number; active: number; inactive: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [cityFilter, setCityFilter] = useState<string>('All Cities');
@@ -268,10 +296,7 @@ export default function SuperAdmin() {
         });
         if (!res.ok) {
           console.warn('Session refresh failed');
-          // If refresh fails, we might be truly unauthorized
-          if (res.status === 401) {
-            router.push('/adminlogin');
-          }
+          // Removed auto-logout redirect as requested
         }
       } catch (err) {
         console.error('Error refreshing session:', err);
@@ -370,7 +395,7 @@ export default function SuperAdmin() {
       city: (fd.get('city') as string) || '',
       location: (fd.get('location') as string) || '',
       subscriptionPlan: planMap[plan] || 'Demo (7 Days)',
-      taxRate,
+      contactNumber: (fd.get('contactNumber') as string) || '',
       startDate,
       endDate,
       username: (fd.get('username') as string) || '',
@@ -384,10 +409,6 @@ export default function SuperAdmin() {
       body: JSON.stringify(payload),
     })
       .then(async (res) => {
-        if (res.status === 401) {
-          router.push('/adminlogin');
-          return;
-        }
         const data = await res.json();
         if (!res.ok || !data.success) {
           throw new Error(data.message || 'Failed to create cafe');
@@ -432,7 +453,10 @@ export default function SuperAdmin() {
 
   // Fetch cafes for Manage tab
   const fetchCafes = () => {
-    setLoading(true);
+    // Show loading shimmer only if we have no data at all
+    if (cafes.length === 0) {
+      setLoading(true);
+    }
     const params = new URLSearchParams();
     if (cityFilter && cityFilter !== 'All Cities') params.set('city', cityFilter);
     if (statusFilter === 'active' || statusFilter === 'inactive') params.set('status', statusFilter);
@@ -440,15 +464,18 @@ export default function SuperAdmin() {
     const qs = params.toString() ? `?${params.toString()}` : '';
     fetch(`/api/cafes${qs}`, { credentials: 'include' })
       .then(async (res) => {
-        if (res.status === 401) {
-          router.push('/adminlogin');
-          return;
-        }
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || 'Failed to fetch cafes');
         const list = Array.isArray(data.data) ? data.data : [];
         setCafes(list);
         setStats(data.stats || null);
+        
+        // --- CACHE THE DATA ---
+        try {
+          window.sessionStorage.setItem('sd:admin:cafes', JSON.stringify(list));
+          if (data.stats) window.sessionStorage.setItem('sd:admin:stats', JSON.stringify(data.stats));
+        } catch {}
+
         if (cityFilter === 'All Cities') {
   // Extract cities, filter out null/undefined/empty values, and ensure they're strings
   const cities = list
@@ -480,10 +507,6 @@ export default function SuperAdmin() {
       body: JSON.stringify({ isActive }),
     })
       .then((res) => {
-        if (res.status === 401) {
-          router.push('/adminlogin');
-          return;
-        }
         fetchCafes();
         toast({
           title: isActive ? "✅ Cafe Activated" : "⏸️ Cafe Deactivated",
@@ -512,7 +535,7 @@ export default function SuperAdmin() {
   }, [cityFilter, statusFilter, debouncedSearch]);
 
   // Modal functions - Updated to include all fields including start date
-  const openEditModal = (name: string, owner: string, city: string, email: string = '', location: string = '', currentPlan: string = '1', endDate: string = '', startDate: string = '', cafeSlug?: string, taxRateValue: number = 5.0, username: string = '') => {
+  const openEditModal = (name: string, owner: string, city: string, email: string = '', location: string = '', currentPlan: string = '1', endDate: string = '', startDate: string = '', cafeSlug?: string, contactNumber: string = '', username: string = '') => {
     setEditName(name);
     setEditOwner(owner);
     setEditCity(city);
@@ -520,7 +543,7 @@ export default function SuperAdmin() {
     setEditLocation(location);
     setEditPlan(currentPlan);
     setEditEndDate(endDate);
-    setEditTaxRate(taxRateValue);
+    setEditContactNumber(contactNumber);
     setEditUsername(username);
     setEditStartDate(startDate || new Date().toISOString().split('T')[0]); // Set default if not provided
     if (cafeSlug) setEditSlug(cafeSlug);
@@ -548,7 +571,7 @@ export default function SuperAdmin() {
           email: editEmail,
           location: editLocation,
           subscriptionPlan,
-          taxRate: editTaxRate,
+          contactNumber: editContactNumber,
           username: editUsername,
           slug: editSlug,
           startDate: editStartDate,
@@ -598,6 +621,14 @@ export default function SuperAdmin() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showModal]);
+
+  if (!isInitialized) {
+    return (
+      <div className="dashboard-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <div className="shimmer" style={{ width: 100, height: 20 }} />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -710,13 +741,13 @@ export default function SuperAdmin() {
         <div className="tab-container">
           <button 
             className={`tab-btn ${activeTab === 'add' ? 'active' : ''}`} 
-            onClick={() => setActiveTab('add')}
+            onClick={() => handleTabChange('add')}
           >
             Add Cafes
           </button>
           <button 
             className={`tab-btn ${activeTab === 'manage' ? 'active' : ''}`} 
-            onClick={() => setActiveTab('manage')}
+            onClick={() => handleTabChange('manage')}
           >
             Manage Cafes
           </button>
@@ -798,17 +829,8 @@ export default function SuperAdmin() {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Tax Rate (%)</label>
-                  <input 
-                    type="number" 
-                    className="form-control" 
-                    value={taxRate}
-                    onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    required 
-                  />
+                  <label>Contact Number</label>
+                  <input name="contactNumber" type="text" className="form-control" placeholder="e.g. +91 98765 43210" required />
                 </div>
                 
                 {/* Credentials */}
@@ -912,7 +934,7 @@ export default function SuperAdmin() {
                   <tr>
                     <th>Cafe Name</th>
                     <th>Owner</th>
-                    <th>Email</th>
+                    <th>Contact Number</th>
                     <th>City</th>
                     <th>Location</th>
                     <th>Plan</th>
@@ -941,7 +963,7 @@ export default function SuperAdmin() {
                     <tr key={cafe._id}>
                       <td><div className="cell-content">{cafe.cafeName}</div></td>
                       <td><div className="cell-content">{cafe.ownerName}</div></td>
-                      <td><div className="cell-content">{cafe.email || '—'}</div></td>
+                      <td><div className="cell-content">{cafe.contactNumber || '—'}</div></td>
                       <td><div className="cell-content">{cafe.city}</div></td>
                       <td><div className="cell-content">{cafe.location}</div></td>
                       <td><div className="cell-content">{cafe.subscriptionPlan}</div></td>
@@ -975,7 +997,7 @@ export default function SuperAdmin() {
                                 new Date(cafe.endDate).toISOString().split('T')[0],
                                 new Date(cafe.startDate).toISOString().split('T')[0],
                                 cafe.slug,
-                                cafe.taxRate || 5.0,
+                                cafe.contactNumber || '',
                                 cafe.username || ''
                               )
                             }
@@ -1128,15 +1150,12 @@ export default function SuperAdmin() {
                   </div>
                   <div className="form-row">
                     <div className="form-group">
-                      <label>Tax Rate (%)</label>
+                      <label>Contact Number</label>
                       <input 
-                        type="number" 
+                        type="text" 
                         className="form-control" 
-                        value={editTaxRate}
-                        onChange={(e) => setEditTaxRate(parseFloat(e.target.value) || 0)}
-                        min="0"
-                        max="100"
-                        step="0.1"
+                        value={editContactNumber}
+                        onChange={(e) => setEditContactNumber(e.target.value)}
                         required 
                       />
                     </div>

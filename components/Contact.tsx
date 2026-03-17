@@ -1,32 +1,94 @@
-import { useState } from "react";
+"use client";
+
+import { useState, useEffect } from "react";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Mail, Phone, Clock, Send } from "lucide-react";
+import { Mail, Phone, Clock, Send, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import qrScanning from "@/assets/qr-scanning.jpg";
 
+const contactSchema = z.object({
+  contactNo: z.string().min(10, "Contact number must be at least 10 digits"),
+  email: z.string().email("Invalid email address"),
+  cafeLocation: z.string().min(3, "Cafe location must be at least 3 characters"),
+  cafeCity: z.string().min(3, "Cafe city must be at least 3 characters"),
+});
+
 const Contact = () => {
   const [formData, setFormData] = useState({
-    name: "",
+    contactNo: "",
     email: "",
-    cafe: "",
-    message: ""
+    cafeLocation: "",
+    cafeCity: "",
   });
+  const [errors, setErrors] = useState<z.ZodError | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasSubmittedRecently, setHasSubmittedRecently] = useState(false);
   const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    const lastSubmission = localStorage.getItem("lastContactSubmission");
+    if (lastSubmission) {
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      if (Date.now() - parseInt(lastSubmission) < twentyFourHours) {
+        setHasSubmittedRecently(true);
+      }
+    }
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Simulate form submission
-    toast({
-      title: "Request Sent Successfully!",
-      description: "We'll contact you within 24 hours to schedule your demo.",
-    });
-    
-    // Reset form
-    setFormData({ name: "", email: "", cafe: "", message: "" });
+    setErrors(null);
+
+    const result = contactSchema.safeParse(formData);
+    if (!result.success) {
+      setErrors(result.error);
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(result.data),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Something went wrong");
+      }
+
+      toast({
+        title: "Request Sent Successfully!",
+        description: "We'll get back to you within 24 hours.",
+      });
+
+      // Reset form and set submission flag - FIXED: Use correct field names
+      setFormData({ 
+        contactNo: "", 
+        email: "", 
+        cafeLocation: "", 
+        cafeCity: "" 
+      });
+      localStorage.setItem("lastContactSubmission", Date.now().toString());
+      setHasSubmittedRecently(true);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Submission Failed",
+        description: error.message || "Please try again later.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -53,24 +115,40 @@ const Contact = () => {
           {/* Contact Form */}
           <div className="animate-on-scroll">
             <div className="bg-white rounded-2xl p-8 shadow-lg border border-border">
-              <h3 className="text-2xl font-semibold mb-6">Request a Demo</h3>
+              <h3 className="text-2xl font-semibold mb-6">Contact Us</h3>
               
+              {hasSubmittedRecently && (
+                <div className="bg-blue-100 border-l-4 border-green-500 text-green-700 p-4 rounded-md mb-6" role="alert">
+                  <div className="flex">
+                    <div className="py-1"><Info className="h-5 w-5 mr-3"/></div>
+                    <div>
+                      <p className="font-bold">Your request has been sent</p>
+                      <p className="text-sm">Thank you for your interest! We have received your message and will get back to you shortly.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-foreground mb-2">
-                      Full Name *
+                    <label htmlFor="contactNo" className="block text-sm font-medium text-foreground mb-2">
+                      Contact No. *
                     </label>
                     <Input
-                      id="name"
-                      name="name"
+                      id="contactNo"
+                      name="contactNo"
                       type="text"
                       required
-                      value={formData.name}
+                      value={formData.contactNo}
                       onChange={handleChange}
-                      placeholder="Your full name"
-                      className="border-border focus:border-primary"
+                      placeholder="Your contact number"
+                      className={`border-border focus:border-primary ${errors?.issues.find(e => e.path[0] === 'contactNo') ? 'border-red-500' : ''}`}
+                      disabled={hasSubmittedRecently}
                     />
+                    {errors?.issues.find(e => e.path[0] === 'contactNo') && (
+                      <p className="text-sm text-red-500 mt-1">{errors.issues.find(e => e.path[0] === 'contactNo')?.message}</p>
+                    )}
                   </div>
                   <div>
                     <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
@@ -84,47 +162,62 @@ const Contact = () => {
                       value={formData.email}
                       onChange={handleChange}
                       placeholder="your@email.com"
-                      className="border-border focus:border-primary"
+                      className={`border-border focus:border-primary ${errors?.issues.find(e => e.path[0] === 'email') ? 'border-red-500' : ''}`}
+                      disabled={hasSubmittedRecently}
                     />
+                    {errors?.issues.find(e => e.path[0] === 'email') && (
+                      <p className="text-sm text-red-500 mt-1">{errors.issues.find(e => e.path[0] === 'email')?.message}</p>
+                    )}
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="cafe" className="block text-sm font-medium text-foreground mb-2">
-                    Cafe/Restaurant Name
+                  <label htmlFor="cafeLocation" className="block text-sm font-medium text-foreground mb-2">
+                    Cafe Location *
                   </label>
                   <Input
-                    id="cafe"
-                    name="cafe"
+                    id="cafeLocation"
+                    name="cafeLocation"
                     type="text"
-                    value={formData.cafe}
+                    required
+                    value={formData.cafeLocation}
                     onChange={handleChange}
-                    placeholder="Your business name"
-                    className="border-border focus:border-primary"
+                    placeholder="Your cafe's location"
+                    className={`border-border focus:border-primary ${errors?.issues.find(e => e.path[0] === 'cafeLocation') ? 'border-red-500' : ''}`}
+                    disabled={hasSubmittedRecently}
                   />
+                  {errors?.issues.find(e => e.path[0] === 'cafeLocation') && (
+                    <p className="text-sm text-red-500 mt-1">{errors.issues.find(e => e.path[0] === 'cafeLocation')?.message}</p>
+                  )}
                 </div>
 
                 <div>
-                  <label htmlFor="message" className="block text-sm font-medium text-foreground mb-2">
-                    Tell us about your needs
+                  <label htmlFor="cafeCity" className="block text-sm font-medium text-foreground mb-2">
+                    Cafe City *
                   </label>
-                  <Textarea
-                    id="message"
-                    name="message"
-                    rows={4}
-                    value={formData.message}
+                  <Input
+                    id="cafeCity"
+                    name="cafeCity"
+                    type="text"
+                    required
+                    value={formData.cafeCity}
                     onChange={handleChange}
-                    placeholder="Describe your current setup, number of tables, main challenges, or any specific requirements..."
-                    className="border-border focus:border-primary resize-none"
+                    placeholder="Your cafe's city"
+                    className={`border-border focus:border-primary ${errors?.issues.find(e => e.path[0] === 'cafeCity') ? 'border-red-500' : ''}`}
+                    disabled={hasSubmittedRecently}
                   />
+                  {errors?.issues.find(e => e.path[0] === 'cafeCity') && (
+                    <p className="text-sm text-red-500 mt-1">{errors.issues.find(e => e.path[0] === 'cafeCity')?.message}</p>
+                  )}
                 </div>
 
                 <Button
                   type="submit"
                   className="w-full btn-hero group"
+                  disabled={isLoading || hasSubmittedRecently}
                 >
-                  <Send className="mr-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-                  Send Request
+                  <Send className={`mr-2 h-5 w-5 ${isLoading ? 'animate-pulse' : 'group-hover:translate-x-1'} transition-transform`} />
+                  {isLoading ? "Sending..." : hasSubmittedRecently ? "Request Sent" : "Send Request"}
                 </Button>
               </form>
 
