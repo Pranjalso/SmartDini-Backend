@@ -118,10 +118,5 @@ CafeSchema.index({ city: 1 });
 CafeSchema.index({ isActive: 1 });
 CafeSchema.index({ email: 1 });
 
-// In development, delete the model to ensure schema changes (like new enum values) are picked up
-if (process.env.NODE_ENV === 'development') {
-  delete mongoose.models.Cafe;
-}
-
 const Cafe = mongoose.models.Cafe || mongoose.model<ICafeDocument>('Cafe', CafeSchema);
 export default Cafe;

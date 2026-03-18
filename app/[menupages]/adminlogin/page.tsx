@@ -54,14 +54,16 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
       if (!res.ok || !data.success) {
         throw new Error(data.message || 'Invalid credentials');
       }
-      // Industry Standard: Use the cafeSlug from the API response for a reliable redirect
-      const redirectSlug = data.user?.cafeSlug;
-      if (redirectSlug) {
-        router.push(`/${redirectSlug}/admin`);
-      } else {
-        // Fallback for safety, though the API should always provide the slug
-        router.push(`/${menupages}/admin`);
+      
+      // Redirect to the actual cafe's admin dashboard (in case they logged in from a different cafe's URL)
+      // If it's a superadmin, they should go to the main superadmin dashboard
+      if (data.user.role === 'superadmin') {
+        window.location.href = '/admin';
+        return;
       }
+      
+      const targetSlug = data.user.cafeSlug || menupages;
+      window.location.href = `/${targetSlug}/admin`;
     } catch (err: any) {
       setErrors({ login: err.message || 'Login failed' });
     } finally {
@@ -302,7 +304,7 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
             </div>
           )}
 
-          <Button type="submit" disabled={isLoading} className="w-full h-12 text-base font-semibold bg-primary hover:bg-primary/90 border-2 border-primary/20">
+          <Button type="submit" disabled={isLoading} className="w-full h-12 text-base font-semibold bg-primary hover:bg-primary/90 border-2 border-primary/20 rounded-md">
             {isLoading ? (
               <span className="flex items-center justify-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -379,7 +381,7 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
                             placeholder="admin@cafe.com"
                             className={`pl-9 h-11 border-2 ${
                               errors.email ? 'border-red-500' : 'border-gray-300'
-                            } focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all`}
+                            } focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all rounded-md`}
                           />
                         </div>
                         {errors.email && (
@@ -389,7 +391,7 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
                       <Button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full h-11 bg-primary hover:bg-primary/90 text-white font-medium"
+                        className="w-full h-11 bg-primary hover:bg-primary/90 text-white font-medium rounded-md"
                       >
                         {isLoading ? (
                           <span className="flex items-center justify-center gap-2">
@@ -421,7 +423,7 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
                           maxLength={6}
                           className={`h-11 text-center text-lg tracking-widest font-mono border-2 ${
                             errors.otp ? 'border-red-500' : 'border-gray-300'
-                          } focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all`}
+                          } focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all rounded-md`}
                         />
                         {errors.otp && (
                           <p className="text-xs text-red-500 mt-1">{errors.otp}</p>
@@ -447,7 +449,7 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
                       <Button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full h-11 bg-primary hover:bg-primary/90 text-white font-medium"
+                        className="w-full h-11 bg-primary hover:bg-primary/90 text-white font-medium rounded-md"
                       >
                         {isLoading ? (
                           <span className="flex items-center justify-center gap-2">
@@ -482,7 +484,7 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
                             placeholder="Enter new password"
                             className={`pl-9 pr-9 h-11 border-2 ${
                               errors.newPassword ? 'border-red-500' : 'border-gray-300'
-                            } focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all`}
+                            } focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all rounded-md`}
                           />
                           <button
                             type="button"
@@ -511,7 +513,7 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
                             placeholder="Confirm new password"
                             className={`pl-9 pr-9 h-11 border-2 ${
                               errors.confirmPassword ? 'border-red-500' : 'border-gray-300'
-                            } focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all`}
+                            } focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all rounded-md`}
                           />
                           <button
                             type="button"
@@ -527,7 +529,7 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
                       </div>
 
                       {/* Password Requirements */}
-                      <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
+                      <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-md">
                         <p className="font-medium mb-1">Password must:</p>
                         <ul className="list-disc list-inside space-y-0.5">
                           <li>Be at least 8 characters long</li>
@@ -542,14 +544,14 @@ export default function CafeAdminLogin({ params }: { params: { menupages: string
                         <Button
                           type="button"
                           onClick={closeModal}
-                          className="flex-1 h-11 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium border-0"
+                          className="flex-1 h-11 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium border-0 rounded-md"
                         >
                           Cancel
                         </Button>
                         <Button
                           type="submit"
                           disabled={isLoading}
-                          className="flex-1 h-11 bg-primary hover:bg-primary/90 text-white font-medium"
+                          className="flex-1 h-11 bg-primary hover:bg-primary/90 text-white font-medium rounded-md"
                         >
                           {isLoading ? (
                             <span className="flex items-center justify-center gap-2">

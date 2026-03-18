@@ -3,6 +3,7 @@
 import { useState, useRef, ChangeEvent, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { UtensilsCrossed, Image as ImageIcon, Pencil, Trash2, Check, X, ChevronDown, UploadCloud, Plus, Tag, Loader2 } from "lucide-react";
+import useSWR, { mutate } from "swr";
 
 type MenuItem = {
   id: string;
@@ -87,10 +88,12 @@ const MenuItemsSkeleton = () => {
 export default function ManageMenuPage() {
   const params = useParams();
   const menupages = params?.menupages as string;
+  const menuUrl = menupages ? `/api/menu/${menupages}` : null;
+  const { data, isLoading: swrLoading } = useSWR(menuUrl);
+
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   
@@ -104,46 +107,29 @@ export default function ManageMenuPage() {
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [newCategory, setNewCategory] = useState("");
 
+  // Synchronize local menu state with SWR data
   useEffect(() => {
-    const fetchData = async () => {
-      if (!menupages) return;
-      setInitialLoading(true);
-      setError(null);
-      try {
-        const [catsRes, itemsRes] = await Promise.all([
-          fetch(`/api/menu/${menupages}/categories`, { cache: "no-store" }),
-          fetch(`/api/menu/${menupages}`, { cache: "no-store" }),
-        ]);
-        const catsJson = await catsRes.json();
-        const itemsJson = await itemsRes.json();
-        if (catsJson?.success && Array.isArray(catsJson.data)) {
-          const fetchedCats = catsJson.data.map((c: any) => c.name).filter(Boolean);
-          // Merge fetched categories with DEFAULT_CATEGORIES and ensure uniqueness, then sort
-          const combinedCats = Array.from(new Set([...DEFAULT_CATEGORIES, ...fetchedCats])).sort();
-          setCategories(combinedCats);
-        } else {
-          setCategories([...DEFAULT_CATEGORIES].sort());
-        }
-        if (itemsJson?.success && Array.isArray(itemsJson.data)) {
-          const items: MenuItem[] = itemsJson.data.map((it: any) => ({
-            id: it._id,
-            name: it.name,
-            price: it.price,
-            category: it.category,
-            imageUrl: it.imageUrl,
-          }));
-          setMenu(items);
-        } else {
-          setMenu([]);
-        }
-      } catch (e: any) {
-        setError("Failed to load menu");
-      } finally {
-        setInitialLoading(false);
-      }
-    };
-    fetchData();
-  }, [menupages]);
+    if (data?.success && Array.isArray(data.data)) {
+      const items: MenuItem[] = data.data.map((it: any) => ({
+        id: it._id,
+        name: it.name,
+        price: it.price,
+        category: it.category,
+        imageUrl: it.imageUrl,
+      }));
+      setMenu(items);
+      
+      const uniqueCats = Array.from(new Set(items.map(i => i.category)));
+      const combinedCats = Array.from(new Set([...DEFAULT_CATEGORIES, ...uniqueCats])).sort();
+      setCategories(combinedCats);
+    }
+  }, [data]);
+
+  const initialLoading = swrLoading && !data;
+
+  const fetchMenu = async () => {
+    mutate(menuUrl);
+  };
   
   const transformCloudinary = (url: string, w: number, h: number) => {
     if (!url.includes('res.cloudinary.com')) return url;
@@ -257,6 +243,8 @@ export default function ManageMenuPage() {
       setImgPreview(null);
       setImgFile(null);
       if (fileRef.current) fileRef.current.value = "";
+      // Refresh cached data
+      mutate(menuUrl);
     } catch (e: any) {
       setError(e?.message || "Failed to add");
     } finally {
@@ -312,7 +300,7 @@ export default function ManageMenuPage() {
       if (!res.ok || !json?.success) {
         throw new Error(json?.message || "Failed to delete item");
       }
-      setMenu(prev => prev.filter(m => m.id !== id));
+      mutate(menuUrl);
     } catch (e: any) {
       setError(e?.message || "Failed to delete");
     } finally {
@@ -343,19 +331,18 @@ export default function ManageMenuPage() {
         body: JSON.stringify(payload),
       });
       const json = await res.json();
-      if (!res.ok || !json?.success) {
+      if (json.success) {
+        // Get the updated category from the payload, not from undefined variable
+        const updatedCategory = payload.category;
+        
+        // Update categories if this is a new category
+        if (!categories.includes(updatedCategory)) {
+          setCategories(prev => [...prev, updatedCategory].sort());
+        }
+        
+        mutate(menuUrl);
+      } else {
         throw new Error(json?.message || "Failed to update item");
-      }
-      const updated = json.data;
-      setMenu(prev => prev.map(m => m.id === id ? {
-        id: updated._id,
-        name: updated.name,
-        price: updated.price,
-        category: updated.category,
-        imageUrl: updated.imageUrl,
-      } : m));
-      if (!categories.includes(updated.category)) {
-        setCategories(prev => [...prev, updated.category]);
       }
     } catch (e: any) {
       setError(e?.message || "Failed to update");
@@ -419,7 +406,7 @@ export default function ManageMenuPage() {
                   value={itemName}
                   onChange={(e) => setItemName(e.target.value)}
                   placeholder="eg.: Margherita Pizza"
-                  className="w-full bg-white border border-gray-200 rounded-lg px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium outline-none focus:border-[#D92632] focus:ring-1 focus:ring-[#D92632] transition-all"
+                  className="w-full bg-white border border-gray-200 rounded-md px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium outline-none focus:border-[#D92632] focus:ring-1 focus:ring-[#D92632] transition-all"
                 />
               </div>
 
@@ -430,7 +417,7 @@ export default function ManageMenuPage() {
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
                   placeholder="eg.: 149"
-                  className="w-full bg-white border border-gray-200 rounded-lg px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium outline-none focus:border-[#D92632] focus:ring-1 focus:ring-[#D92632] transition-all"
+                  className="w-full bg-white border border-gray-200 rounded-md px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium outline-none focus:border-[#D92632] focus:ring-1 focus:ring-[#D92632] transition-all"
                 />
               </div>
 
@@ -441,7 +428,7 @@ export default function ManageMenuPage() {
                     <select
                       value={category}
                       onChange={(e) => setCategory(e.target.value)}
-                      className="w-full bg-white border border-gray-200 rounded-lg px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium outline-none focus:border-[#D92632] focus:ring-1 focus:ring-[#D92632] appearance-none text-gray-700"
+                      className="w-full bg-white border border-gray-200 rounded-md px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium outline-none focus:border-[#D92632] focus:ring-1 focus:ring-[#D92632] appearance-none text-gray-700"
                     >
                       <option value="">Select Category</option>
                       {categories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -453,7 +440,7 @@ export default function ManageMenuPage() {
                     <button
                       type="button"
                       onClick={() => setShowAddCategory(true)}
-                      className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 sm:py-3 bg-white border border-gray-200 rounded-lg text-xs sm:text-sm font-medium text-gray-600 hover:text-[#D92632] hover:border-[#D92632] hover:bg-red-50 transition-all whitespace-nowrap"
+                      className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 sm:py-3 bg-white border border-gray-200 rounded-md text-xs sm:text-sm font-medium text-gray-600 hover:text-[#D92632] hover:border-[#D92632] hover:bg-red-50 transition-all whitespace-nowrap"
                     >
                       <Plus size={16} className="text-gray-400 group-hover:text-[#D92632]" />
                       <span>New Category</span>
@@ -467,7 +454,7 @@ export default function ManageMenuPage() {
                           value={newCategory}
                           onChange={(e) => setNewCategory(e.target.value)}
                           placeholder="Enter category name"
-                          className="w-full bg-white border border-gray-200 rounded-lg pl-8 pr-3 py-2 sm:py-3 text-xs sm:text-sm font-medium outline-none focus:border-[#D92632] focus:ring-1 focus:ring-[#D92632] transition-all"
+                          className="w-full bg-white border border-gray-200 rounded-md pl-8 pr-3 py-2 sm:py-3 text-xs sm:text-sm font-medium outline-none focus:border-[#D92632] focus:ring-1 focus:ring-[#D92632] transition-all"
                           autoFocus
                           onKeyPress={(e) => e.key === 'Enter' && handleAddCategory()}
                         />
@@ -476,7 +463,7 @@ export default function ManageMenuPage() {
                         <button
                           onClick={handleAddCategory}
                           disabled={!newCategory.trim()}
-                          className="flex-1 sm:flex-none px-3 sm:px-4 py-2 sm:py-3 bg-[#10B981] hover:bg-[#059669] text-white rounded-lg text-xs sm:text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                          className="flex-1 sm:flex-none px-3 sm:px-4 py-2 sm:py-3 bg-[#10B981] hover:bg-[#059669] text-white rounded-md text-xs sm:text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                         >
                           Add
                         </button>
@@ -485,7 +472,7 @@ export default function ManageMenuPage() {
                             setShowAddCategory(false);
                             setNewCategory("");
                           }}
-                          className="flex-1 sm:flex-none px-3 sm:px-4 py-2 sm:py-3 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap"
+                          className="flex-1 sm:flex-none px-3 sm:px-4 py-2 sm:py-3 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap"
                         >
                           Cancel
                         </button>
@@ -499,7 +486,7 @@ export default function ManageMenuPage() {
                 <button
                   onClick={handleAdd}
                   disabled={!itemName.trim() || !price || !category || !imgFile || uploading}
-                  className="w-full sm:w-auto bg-[#10B981] hover:bg-[#059669] text-white px-6 sm:px-8 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-bold shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full sm:w-auto bg-[#10B981] hover:bg-[#059669] text-white px-6 sm:px-8 py-2 sm:py-2.5 rounded-md text-xs sm:text-sm font-bold shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {uploading ? 'Uploading…' : 'Save Item'}
                 </button>

@@ -786,15 +786,18 @@ Making restaurant menus digital, one cafe at a time.
   });
 }
 
+
 export async function sendContactFormEmail(opts: {
-  contactNo: string;
+  fullName: string;
+  contactNumber: string;
   email: string;
-  cafeLocation: string;
-  cafeCity: string;
+  city: string;
+  cafeRestaurantName: string;
+  needs: string;
 }) {
-  const { contactNo, email, cafeLocation, cafeCity } = opts;
+  const { fullName, contactNumber, email, city, cafeRestaurantName, needs } = opts;
   const transporter = createTransport();
-  const subject = `📩 New Contact Form Submission - ${email}`;
+  const subject = `📩 New Contact Form Submission - ${fullName} from ${cafeRestaurantName}`;
   
   const html = `
     <!DOCTYPE html>
@@ -814,7 +817,7 @@ export async function sendContactFormEmail(opts: {
         
         <div class="email-content">
           <div class="greeting">
-            New message from <span class="greeting-highlight">${email}</span> 👋
+            New message from <span class="greeting-highlight">${fullName}</span> 👋
           </div>
           
           <div class="message">
@@ -832,8 +835,13 @@ export async function sendContactFormEmail(opts: {
             </div>
             
             <div class="link-container">
+              <div class="link-label">Full Name</div>
+              <div class="link-value">${fullName}</div>
+            </div>
+            
+            <div class="link-container">
               <div class="link-label">Contact Number</div>
-              <div class="link-value">${contactNo}</div>
+              <div class="link-value">${contactNumber}</div>
             </div>
             
             <div class="link-container">
@@ -844,19 +852,24 @@ export async function sendContactFormEmail(opts: {
             </div>
             
             <div class="link-container">
-              <div class="link-label">Cafe Location</div>
-              <div class="link-value">${cafeLocation}</div>
+              <div class="link-label">City</div>
+              <div class="link-value">${city}</div>
             </div>
 
             <div class="link-container">
-              <div class="link-label">Cafe City</div>
-              <div class="link-value">${cafeCity}</div>
+              <div class="link-label">Cafe/Restaurant Name</div>
+              <div class="link-value">${cafeRestaurantName}</div>
+            </div>
+            
+            <div class="link-container">
+              <div class="link-label">Requirements</div>
+              <div class="link-value" style="white-space: pre-line;">${needs}</div>
             </div>
           </div>
           
           <div class="button-container">
             <a href="mailto:${email}" class="button">
-              Reply to ${email} →
+              Reply to ${fullName} →
             </a>
           </div>
           
@@ -880,10 +893,12 @@ export async function sendContactFormEmail(opts: {
   const text = `
 NEW CONTACT FORM SUBMISSION
 
-Contact Number: ${contactNo}
+Full Name: ${fullName}
+Contact Number: ${contactNumber}
 Email: ${email}
-Cafe Location: ${cafeLocation}
-Cafe City: ${cafeCity}
+City: ${city}
+Cafe/Restaurant Name: ${cafeRestaurantName}
+Requirements: ${needs}
 
 Reply to: ${email}
 
@@ -899,6 +914,7 @@ Reply to: ${email}
     replyTo: email,
   });
 }
+
 export async function sendPasswordOtpEmail(opts: { to: string; cafeName: string; otp: string }) {
   const { to, cafeName, otp } = opts;
   const transporter = createTransport();

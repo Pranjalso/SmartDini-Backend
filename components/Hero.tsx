@@ -8,7 +8,7 @@ import Image from "next/image";
 const Hero = () => {
   return (
     <section id="home" className="relative bg-brand-white overflow-hidden">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 md:pt-10 lg:pt-12 pb-12 md:pb-16 lg:pb-20">
+     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 md:pt-6 lg:pt-32 pb-12 md:pb-16 lg:pb-20">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           {/* Hero Content */}
           <div className="space-y-6 animate-fade-in text-center lg:text-left">
@@ -45,13 +45,13 @@ const Hero = () => {
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-              <Button className="bg-primary text-white hover:bg-primary/90 px-8 py-6 text-lg font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 group w-full sm:w-auto">
+              <Button className="bg-primary text-white hover:bg-primary/90 px-8 py-6 text-lg font-semibold rounded-md shadow-lg hover:shadow-xl transition-all duration-300 group w-full sm:w-auto">
                 Order Your Product
                 <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
               </Button>
               <Button 
                 variant="outline" 
-                className="border-2 border-primary text-primary hover:bg-primary hover:text-white px-8 py-6 text-lg font-semibold rounded-lg transition-all duration-300 group w-full sm:w-auto"
+                className="border-2 border-primary text-primary hover:bg-primary hover:text-white px-8 py-6 text-lg font-semibold rounded-md transition-all duration-300 group w-full sm:w-auto"
               >
                 <Play className="mr-2 h-5 w-5 group-hover:scale-110 transition-transform" />
                 Watch Demo

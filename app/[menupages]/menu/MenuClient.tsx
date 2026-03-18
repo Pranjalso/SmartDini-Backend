@@ -258,8 +258,8 @@ export default function MenuClient({ menupages, initialItems, initialCategories 
         {/* Scrollable Content Area */}
         <div className="flex-1 overflow-y-auto pb-28">
           <div className="px-4 py-2">
-            <div className="bg-brand-red rounded-lg p-3 text-white flex items-center gap-3">
-              <div className="w-12 h-12 rounded-lg bg-white/20 flex items-center justify-center border border-white/20">
+            <div className="bg-brand-red rounded-md p-3 text-white flex items-center gap-3">
+              <div className="w-12 h-12 rounded-md bg-white/20 flex items-center justify-center border border-white/20">
                 <Scan className="w-8 h-8 text-white" />
               </div>
               <div>
@@ -280,7 +280,7 @@ export default function MenuClient({ menupages, initialItems, initialCategories 
                     activeCategory === cat.name ? "opacity-100" : "opacity-80"
                   }`}
                 >
-                  <div className={`w-12 h-12 rounded-xl overflow-hidden border transition-all bg-white shadow-sm ${
+                  <div className={`w-12 h-12 rounded-md overflow-hidden border transition-all bg-white shadow-sm ${
                     activeCategory === cat.name ? "border-brand-red" : "border-gray-200"
                   }`}>
                     <img 
@@ -394,7 +394,7 @@ export default function MenuClient({ menupages, initialItems, initialCategories 
               <Link
                 href={`/${menupages}/menu/checkout`}
                 aria-disabled={uniqueItemsCount === 0}
-                className={`px-6 py-3 rounded-lg font-bold transition-colors shadow-md text-base flex items-center gap-2 ${
+                className={`px-6 py-3 rounded-md font-bold transition-colors shadow-md text-base flex items-center gap-2 ${
                   uniqueItemsCount === 0
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed pointer-events-none'
                     : 'bg-brand-red text-white hover:bg-brand-red/90'

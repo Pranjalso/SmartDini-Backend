@@ -1,8 +1,7 @@
-
 "use client";
 
 import { useState } from "react";
-import { X, Send, Calendar, MapPin, Building, User, Mail, Phone } from "lucide-react";
+import { X, Send, Calendar, MapPin, Building, User, Mail, Phone, CheckCircle } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,7 +65,8 @@ export default function DemoRequestPopup({ onClose }: DemoRequestPopupProps) {
 
       if (response.ok) {
         setSubmitStatus("success");
-        setTimeout(() => onClose(), 2000);
+        // Auto close after 20 seconds instead of 2 seconds
+        setTimeout(() => onClose(), 20000);
       } else {
         setSubmitStatus("error");
       }
@@ -83,7 +83,7 @@ export default function DemoRequestPopup({ onClose }: DemoRequestPopupProps) {
         {/* Header */}
         <div className="bg-brand-red p-6 text-white relative">
           <div className="flex items-center gap-3">
-            <div className="bg-white/20 p-2 rounded-lg">
+            <div className="bg-white/20 p-2 rounded-md">
               <Send className="h-6 w-6 text-white" />
             </div>
             <div>
@@ -103,7 +103,7 @@ export default function DemoRequestPopup({ onClose }: DemoRequestPopupProps) {
           {submitStatus === "success" ? (
             <div className="text-center py-8 animate-in fade-in slide-in-from-bottom-4">
               <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Send className="h-8 w-8" />
+                <CheckCircle className="h-8 w-8" />
               </div>
               <h3 className="text-2xl font-bold text-gray-900 mb-2">Request Sent!</h3>
               <p className="text-gray-600">We'll get back to you within 24 hours to schedule your demo.</p>
@@ -219,7 +219,7 @@ export default function DemoRequestPopup({ onClose }: DemoRequestPopupProps) {
               </div>
 
               {submitStatus === "error" && (
-                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
+                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
                   Failed to send demo request. Please try again later.
                 </div>
               )}

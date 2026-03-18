@@ -47,31 +47,31 @@ const Header = () => {
           <nav className="hidden md:flex space-x-8">
             <Link
               href="/#home"
-              className="text-foreground hover:text-primary transition-colors font-medium"
+              className="text-foregrounddefault hover:text-primary transition-colors font-medium"
             >
               Home
             </Link>
             <Link
               href="/#features"
-              className="text-foreground hover:text-primary transition-colors font-medium"
+              className="text-foregrounddefault hover:text-primary transition-colors font-medium"
             >
               Features
             </Link>
             <Link
               href="/company"
-              className="text-foreground hover:text-primary transition-colors font-medium"
+              className="text-foregrounddefault hover:text-primary transition-colors font-medium"
             >
               Company
             </Link>
             <Link
               href="/#pricing"
-              className="text-foreground hover:text-primary transition-colors font-medium"
+              className="text-foregrounddefault hover:text-primary transition-colors font-medium"
             >
               Pricing
             </Link>
             <Link
               href="/#contact"
-              className="text-foreground hover:text-primary transition-colors font-medium"
+              className="text-foregrounddefault hover:text-primary transition-colors font-medium"
             >
               Contact
             </Link>
@@ -93,7 +93,7 @@ const Header = () => {
               variant="ghost"
               size="sm"
               onClick={toggleMenu}
-              className="text-foreground"
+              className="text-foregrounddefault"
             >
               {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </Button>
@@ -105,35 +105,35 @@ const Header = () => {
           <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] mt-16 px-4 space-y-6">
             <Link
               href="/#home"
-              className="text-2xl text-foreground hover:text-primary font-medium transition-colors py-3"
+              className="text-2xl text-foregrounddefault hover:text-primary font-medium transition-colors py-3"
               onClick={handleNavClick}
             >
               Home
             </Link>
             <Link
               href="/#features"
-              className="text-2xl text-foreground hover:text-primary font-medium transition-colors py-3"
+              className="text-2xl text-foregrounddefault hover:text-primary font-medium transition-colors py-3"
               onClick={handleNavClick}
             >
               Features
             </Link>
             <Link
               href="/company"
-              className="text-2xl text-foreground hover:text-primary font-medium transition-colors py-3"
+              className="text-2xl text-foregrounddefault hover:text-primary font-medium transition-colors py-3"
               onClick={handleNavClick}
             >
               Company
             </Link>
             <Link
               href="/#pricing"
-              className="text-2xl text-foreground hover:text-primary font-medium transition-colors py-3"
+              className="text-2xl text-foregrounddefault hover:text-primary font-medium transition-colors py-3"
               onClick={handleNavClick}
             >
               Pricing
             </Link>
             <Link
               href="/#contact"
-              className="text-2xl text-foreground hover:text-primary font-medium transition-colors py-3"
+              className="text-2xl text-foregrounddefault hover:text-primary font-medium transition-colors py-3"
               onClick={handleNavClick}
             >
               Contact

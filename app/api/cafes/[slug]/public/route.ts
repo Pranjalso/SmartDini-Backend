@@ -31,8 +31,8 @@ export async function GET(
         isActive: cafe.isActive && !isExpired,
         isManuallyDeactivated: !cafe.isActive,
         isExpired,
-        taxRate: typeof cafe.taxRate === 'number' ? cafe.taxRate : 0,
-        showTax: typeof cafe.showTax === 'boolean' ? cafe.showTax : false,
+        taxRate: cafe.taxRate ?? 5.0,
+        showTax: cafe.showTax ?? true,
       },
     });
   } catch (error) {

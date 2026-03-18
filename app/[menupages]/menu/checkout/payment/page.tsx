@@ -162,8 +162,8 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
         const res = await fetch(`/api/cafes/${menupages}/public`, { cache: 'no-store' });
         const json = await res.json();
         if (json?.success && json.data) {
-          const newTax = typeof json.data.taxRate === 'number' ? json.data.taxRate : 0;
-          const newShow = typeof json.data.showTax === 'boolean' ? json.data.showTax : false;
+          const newTax = typeof json.data.taxRate === 'number' ? json.data.taxRate : 5.0;
+          const newShow = typeof json.data.showTax === 'boolean' ? json.data.showTax : true;
           
           setTaxRate(newTax);
           setShowTax(newShow);
@@ -183,7 +183,7 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
 
   // Derived totals
   const subtotal = useMemo(() => lines.reduce((sum, l) => sum + l.price * l.qty, 0), [lines]);
-  const tax = useMemo(() => (showTax === true && taxRate > 0) ? Math.round(subtotal * (taxRate / 100)) : 0, [subtotal, taxRate, showTax]);
+  const tax = useMemo(() => (showTax === true) ? Math.round(subtotal * (taxRate / 100)) : 0, [subtotal, taxRate, showTax]);
   const total = useMemo(() => subtotal + tax, [subtotal, tax]);
 
   const handlePayment = async () => {
@@ -297,7 +297,7 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
                   window.sessionStorage.setItem(`sd:checkout:${menupages}`, JSON.stringify({ ...saved, tableNumber: e.target.value, paymentMethod }));
                 } catch {}
               }}
-              className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D32F2F]/20 ${error ? "border-red-500" : "border-gray-300"}`}
+              className={`w-full px-4 py-3 bg-white border rounded-md focus:outline-none focus:ring-2 focus:ring-[#D32F2F]/20 ${error ? "border-red-500" : "border-gray-300"}`}
               required
             />
           </div>
@@ -310,7 +310,7 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
                 <span className="text-gray-600">Subtotal</span>
                 <span className="font-medium">₹{subtotal}</span>
               </div>
-              {showTax === true && taxRate > 0 && (
+              {showTax === true && (
                 <div className="flex justify-between">
                   <span className="text-gray-600">Tax ({taxRate}%)</span>
                   <span className="font-medium">₹{tax}</span>
@@ -393,14 +393,14 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
                   placeholder="Enter UPI ID (e.g., name@okhdfcbank)"
                   value={upiId}
                   onChange={(e) => setUpiId(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D32F2F]/20"
+                  className="w-full px-4 py-3 bg-white border rounded-md focus:outline-none focus:ring-2 focus:ring-[#D32F2F]/20"
                 />
                 <div className="grid grid-cols-3 gap-2">
                   {['gpay@okhdfcbank', 'phonepe@ybl', 'paytm@okhdfcbank'].map((id) => (
                     <button
                       key={id}
                       onClick={() => setUpiId(id)}
-                      className="px-2 py-1.5 text-xs bg-white border rounded-lg hover:bg-gray-50"
+                      className="px-2 py-1.5 text-xs bg-white border rounded-md hover:bg-gray-50"
                     >
                       {id.split('@')[0]}
                     </button>

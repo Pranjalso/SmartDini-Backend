@@ -36,51 +36,105 @@ export const GET = withCafeAccess(async (
       endDate.setHours(23, 59, 59, 999);
     }
 
-    const query = {
+    const query: any = {
       cafeSlug: slug,
-      createdAt: { $gte: startDate, $lte: endDate }
     };
 
-    const orders = await Order.find(query).lean();
+    if (period !== 'overall') {
+      query.createdAt = { $gte: startDate, $lte: endDate };
+    }
 
-    const stats = {
-      total: orders.length,
-      pending: orders.filter((o: any) => o.orderStatus === 'pending').length,
-      preparing: orders.filter((o: any) => o.orderStatus === 'preparing' || o.orderStatus === 'ready').length,
-      served: orders.filter((o: any) => o.orderStatus === 'served').length,
-      completed: orders.filter((o: any) => o.paymentStatus === 'completed').length,
-      cancelled: orders.filter((o: any) => o.orderStatus === 'cancelled').length,
+    // Use aggregation for much faster results directly from MongoDB
+    const [statsResult] = await Order.aggregate([
+      { $match: query },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          pending: {
+            $sum: { $cond: [{ $eq: ['$orderStatus', 'pending'] }, 1, 0] }
+          },
+          preparing: {
+            $sum: { $cond: [{ $in: ['$orderStatus', ['preparing', 'ready']] }, 1, 0] }
+          },
+          served: {
+            $sum: { $cond: [{ $eq: ['$orderStatus', 'served'] }, 1, 0] }
+          },
+          completed: {
+            $sum: { $cond: [{ $eq: ['$paymentStatus', 'completed'] }, 1, 0] }
+          },
+          cancelled: {
+            $sum: { $cond: [{ $eq: ['$orderStatus', 'cancelled'] }, 1, 0] }
+          }
+        }
+      }
+    ]);
+
+    const stats = statsResult || {
+      total: 0,
+      pending: 0,
+      preparing: 0,
+      served: 0,
+      completed: 0,
+      cancelled: 0,
     };
 
-    // Generate chart data (group by hour if today/yesterday, or by day if 7d/30d)
+    // Generate chart data efficiently using aggregation
     let chartData: any[] = [];
     if (period === 'today' || period === 'yesterday' || (period === 'custom' && date)) {
-      // Group by 2-hour intervals for a cleaner look
+      const hourlyAggregation = await Order.aggregate([
+        { $match: query },
+        {
+          $project: {
+            hour: { $hour: '$createdAt' }
+          }
+        },
+        {
+          $group: {
+            _id: '$hour',
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { _id: 1 } }
+      ]);
+
       const hours = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22];
       chartData = hours.map(h => {
-        const count = orders.filter((o: any) => {
-          const orderHour = new Date(o.createdAt).getHours();
-          return orderHour >= h && orderHour < h + 2;
-        }).length;
+        const matchingHour = hourlyAggregation.find(item => item._id >= h && item._id < h + 2);
+        const count = hourlyAggregation
+          .filter(item => item._id >= h && item._id < h + 2)
+          .reduce((sum, item) => sum + item.count, 0);
         
-        // Format to 12-hour am/pm with dots as requested
-         const periodSuffix = h >= 12 ? 'pm' : 'am';
-         const displayHour = h === 0 ? 12 : (h > 12 ? h - 12 : h);
-         return { name: `${displayHour}.00 ${periodSuffix}`, orders: count };
+        const periodSuffix = h >= 12 ? 'pm' : 'am';
+        const displayHour = h === 0 ? 12 : (h > 12 ? h - 12 : h);
+        return { name: `${displayHour}.00 ${periodSuffix}`, orders: count };
       });
     } else {
-      // Group by day
+      const dailyAggregation = await Order.aggregate([
+        { $match: query },
+        {
+          $project: {
+            date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }
+          }
+        },
+        {
+          $group: {
+            _id: '$date',
+            count: { $sum: 1 }
+          }
+        }
+      ]);
+
+      // For overall, 30d, 7d - we show the appropriate day range
       const days = period === '7d' ? 7 : 30;
       for (let i = days - 1; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
         const dateStr = d.toISOString().split('T')[0];
-        const count = orders.filter((o: any) => 
-          new Date(o.createdAt).toISOString().split('T')[0] === dateStr
-        ).length;
+        const dayMatch = dailyAggregation.find(item => item._id === dateStr);
         chartData.push({ 
           name: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), 
-          orders: count 
+          orders: dayMatch ? dayMatch.count : 0 
         });
       }
     }

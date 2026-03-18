@@ -106,7 +106,7 @@ const Features = () => {
                     Watermark
                   </div>
                 )}
-                <div className="w-12 h-12 bg-brand-red rounded-lg flex items-center justify-center mb-4">
+                <div className="w-12 h-12 bg-brand-red rounded-md flex items-center justify-center mb-4">
                   <feature.icon className="h-6 w-6 text-white" />
                 </div>
                 <h4 className="text-xl font-semibold mb-3">{feature.title}</h4>
@@ -135,7 +135,7 @@ const Features = () => {
                     Premium
                   </div>
                 )}
-                <div className="w-12 h-12 bg-brand-red rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 shadow-md">
+                <div className="w-12 h-12 bg-brand-red rounded-md flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 shadow-md">
                   <feature.icon className="h-6 w-6 text-white" />
                 </div>
                 <h4 className="text-xl font-semibold mb-3 group-hover:text-brand-red transition-colors duration-300">{feature.title}</h4>
@@ -182,7 +182,7 @@ const Features = () => {
                 <div className="text-4xl mb-4 animate-pulse">🚀</div>
                 <h4 className="text-xl font-semibold mb-2">Ready to upgrade?</h4>
                 <p className="text-muted-foreground mb-4">Start with basic features or go premium from day one</p>
-                <button className="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-300 hover:shadow-lg hover:scale-105 active:scale-95">
+                <button className="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-md transition-all duration-300 hover:shadow-lg hover:scale-105 active:scale-95">
                   Explore All Features
                 </button>
               </div>

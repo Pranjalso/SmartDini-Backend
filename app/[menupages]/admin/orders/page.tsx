@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Package, Clock, Armchair, CheckCircle, Wallet, Smartphone, Loader2, ChevronDown } from "lucide-react";
 import { useRouter, useParams } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+import useSWR, { mutate } from "swr";
 
 // ─── Types ───
 type OrderItem = {
@@ -103,7 +104,7 @@ function OrderCard({
               </h4>
               
               {/* Payment Method Badge - Beside ID */}
-              <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${paymentBadge.bgColor} ${paymentBadge.textColor} text-[10px] font-bold whitespace-nowrap`}>
+              <div className={`flex items-center gap-1 px-2 py-0.5 rounded-md ${paymentBadge.bgColor} ${paymentBadge.textColor} text-[10px] font-bold whitespace-nowrap`}>
                 <PaymentIcon size={10} strokeWidth={2.5} />
                 <span>{paymentBadge.label}</span>
               </div>
@@ -134,7 +135,7 @@ function OrderCard({
             <button
               onClick={handleMarkAsServed}
               disabled={isUpdating}
-              className="flex items-center gap-1 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-[#10B981] text-white rounded-lg text-[10px] sm:text-xs font-bold hover:bg-[#059669] transition-colors shadow-sm whitespace-nowrap disabled:opacity-50"
+              className="flex items-center gap-1 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-[#10B981] text-white rounded-md text-[10px] sm:text-xs font-bold hover:bg-[#059669] transition-colors shadow-sm whitespace-nowrap disabled:opacity-50"
             >
               <CheckCircle size={12} />
               <span>Mark as Served</span>
@@ -144,7 +145,7 @@ function OrderCard({
             <button
               onClick={handleMoveToPayment}
               disabled={isUpdating}
-              className="p-1.5 sm:p-1.5 bg-[#10B981] text-white rounded-full hover:bg-[#059669] transition-colors shadow-sm disabled:opacity-50"
+              className="p-1.5 sm:p-1.5 bg-[#10B981] text-white rounded-md hover:bg-[#059669] transition-colors shadow-sm disabled:opacity-50"
               title="Move to Payment Completed"
             >
               <CheckCircle size={16} strokeWidth={2} />
@@ -186,7 +187,7 @@ function OrderCard({
         <div className="mt-3 pt-3 border-t border-gray-200/50">
           <button
             onClick={() => setExpanded(!expanded)}
-            className="w-full flex items-center justify-center gap-1.5 py-1 text-[11px] sm:text-xs font-bold text-[#D92632] hover:bg-[#FEE2E2]/30 rounded-lg transition-colors"
+            className="w-full flex items-center justify-center gap-1.5 py-1 text-[11px] sm:text-xs font-bold text-[#D92632] hover:bg-[#FEE2E2]/30 rounded-md transition-colors"
           >
             <span>{expanded ? 'Show Less' : 'View Details'}</span>
             <ChevronDown size={14} className={`transform transition-transform ${expanded ? 'rotate-180' : ''}`} />
@@ -197,6 +198,30 @@ function OrderCard({
   );
 }
 
+// ─── Orders Skeleton Loader ───
+const OrdersSkeleton = () => {
+  return (
+    <div className="animate-pulse space-y-4">
+      {[...Array(3)].map((_, i) => (
+        <div key={i} className="bg-[#F3F4F6] rounded-2xl p-4 mb-4 shadow-sm h-40">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0"></div>
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-24 bg-gray-200 rounded"></div>
+              <div className="h-3 w-32 bg-gray-200 rounded"></div>
+            </div>
+            <div className="h-8 w-20 bg-gray-200 rounded"></div>
+          </div>
+          <div className="space-y-2">
+            <div className="h-10 w-full bg-white rounded-xl"></div>
+            <div className="h-10 w-full bg-white rounded-xl"></div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 // ─── Main Page Component ───
 export default function OrdersPage() {
   const router = useRouter();
@@ -204,12 +229,29 @@ export default function OrdersPage() {
   const slug = params?.menupages as string;
   const { toast } = useToast();
   
-  const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
-  const [servedOrders, setServedOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<"pending" | "served">("pending");
   const [isMobile, setIsMobile] = useState(false);
+
+  // Fetch both preparing/ready and served orders - only those that haven't paid yet
+  const preparingUrl = slug ? `/api/orders/${slug}?status=preparing,ready&paymentStatus=pending` : null;
+  const servedUrl = slug ? `/api/orders/${slug}?status=served&paymentStatus=pending` : null;
+
+  const { data: preparingData, isLoading: preparingLoading } = useSWR(preparingUrl, {
+    refreshInterval: 10000, // Poll every 10s
+    revalidateOnFocus: true,
+    keepPreviousData: true,
+  });
+
+  const { data: servedData, isLoading: servedLoading } = useSWR(servedUrl, {
+    refreshInterval: 10000, // Poll every 10s
+    revalidateOnFocus: true,
+    keepPreviousData: true,
+  });
+
+  const pendingOrders = preparingData?.success ? (preparingData.data as Order[]) : [];
+  const servedOrders = servedData?.success ? (servedData.data as Order[]) : [];
+  const loading = preparingLoading || servedLoading;
 
   // Check if mobile view
   useEffect(() => {
@@ -222,34 +264,6 @@ export default function OrdersPage() {
     
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-
-  const fetchOrders = useCallback(async () => {
-    if (!slug) return;
-    try {
-      // Fetch both preparing/ready and served orders - only those that haven't paid yet
-      const [preparingRes, servedRes] = await Promise.all([
-        fetch(`/api/orders/${slug}?status=preparing,ready&paymentStatus=pending`),
-        fetch(`/api/orders/${slug}?status=served&paymentStatus=pending`)
-      ]);
-      
-      const preparingData = await preparingRes.json();
-      const servedData = await servedRes.json();
-      
-      if (preparingData.success) setPendingOrders(preparingData.data || []);
-      if (servedData.success) setServedOrders(servedData.data || []);
-    } catch (err) {
-      console.error("Failed to fetch orders:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [slug]);
-
-  useEffect(() => {
-    fetchOrders();
-    // Poll for active orders every 15 seconds
-    const interval = setInterval(fetchOrders, 15000);
-    return () => clearInterval(interval);
-  }, [fetchOrders]);
 
   const handleMarkAsServed = async (orderId: string) => {
     setUpdatingId(orderId);
@@ -265,12 +279,10 @@ export default function OrdersPage() {
           title: "Order Served",
           description: `Order #${pendingOrders.find(o => o._id === orderId)?.orderNumber} marked as served.`,
         });
-        // Move order locally
-        const orderToMove = pendingOrders.find(o => o._id === orderId);
-        if (orderToMove) {
-          setPendingOrders(prev => prev.filter(o => o._id !== orderId));
-          setServedOrders(prev => [{ ...orderToMove, orderStatus: "served" }, ...prev]);
-        }
+        
+        // Mutate both endpoints to reflect the change
+        mutate(preparingUrl);
+        mutate(servedUrl);
       }
     } catch (err: any) {
       toast({
@@ -297,8 +309,9 @@ export default function OrdersPage() {
           title: "Payment Completed",
           description: `Order #${servedOrders.find(o => o._id === orderId)?.orderNumber} moved to payment completed.`,
         });
-        // Remove order locally
-        setServedOrders(prev => prev.filter(o => o._id !== orderId));
+        
+        // Mutate the served orders endpoint
+        mutate(servedUrl);
       } else {
         throw new Error(data.message || "Failed to update payment status");
       }
@@ -314,16 +327,11 @@ export default function OrdersPage() {
   };
 
   if (loading && pendingOrders.length === 0 && servedOrders.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-        <Loader2 size={48} className="mb-4 animate-spin opacity-20" />
-        <p className="text-sm font-medium">Loading orders...</p>
-      </div>
-    );
+    // Keep it empty but styled to prevent flicker
   }
 
   return (
-    <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-sm border border-gray-100 min-h-[600px] w-full overflow-x-hidden">
+    <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-sm border border-gray-100 min-h-[600px] w-full overflow-x-hidden font-poppins">
       
       {/* ─── Top Header ─── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8">
@@ -338,7 +346,7 @@ export default function OrdersPage() {
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <button
             onClick={() => setMobileView("served")}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-sm font-bold transition-colors ${
               mobileView === "served" && isMobile
                 ? 'bg-[#059669] text-white' 
                 : 'bg-[#D1FAE5] text-[#059669]'
@@ -349,7 +357,7 @@ export default function OrdersPage() {
           </button>
           <button
             onClick={() => setMobileView("pending")}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-sm font-bold transition-colors ${
               mobileView === "pending" && isMobile
                 ? 'bg-[#EF4444] text-white' 
                 : 'bg-[#FFEDD5] text-[#EF4444]'
@@ -363,7 +371,9 @@ export default function OrdersPage() {
 
       {/* ─── Mobile View (Single Column) ─── */}
       <div className="block lg:hidden">
-        {mobileView === "pending" ? (
+        {loading && pendingOrders.length === 0 && servedOrders.length === 0 ? (
+          <OrdersSkeleton />
+        ) : mobileView === "pending" ? (
           <div>
             <div className="flex items-center gap-2 mb-4">
               <Clock size={18} className="text-[#EF4444]" />
@@ -414,8 +424,14 @@ export default function OrdersPage() {
 
       {/* ─── Desktop View (Two Column Layout) ─── */}
       <div className="hidden lg:grid lg:grid-cols-2 gap-8">
-        
-        {/* Column 1: Pending */}
+        {loading && pendingOrders.length === 0 && servedOrders.length === 0 ? (
+          <>
+            <OrdersSkeleton />
+            <OrdersSkeleton />
+          </>
+        ) : (
+          <>
+            {/* Column 1: Pending */}
         <div>
           <div className="flex items-center gap-2 mb-4">
             <Clock size={18} className="text-[#EF4444]" />
@@ -462,7 +478,8 @@ export default function OrdersPage() {
             )}
           </div>
         </div>
-
+          </>
+        )}
       </div>
     </div>
   );

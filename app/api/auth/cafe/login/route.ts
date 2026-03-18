@@ -28,21 +28,142 @@ export async function POST(req: NextRequest) {
 
     const { username, password } = validation.data;
 
-    // Industry Standard: Always authenticate cafe admins against the Admin collection
-    const admin = await Admin.findOne({ 
-      username, 
-      role: 'cafeadmin' 
-    });
+    // Check for superadmin login first (env-based)
+    const envUser = process.env.SUPERADMIN_USERNAME;
+    const envPass = process.env.SUPERADMIN_PASSWORD;
 
-    if (!admin) {
-      return NextResponse.json(
-        { success: false, message: 'Invalid credentials or not a cafe admin' },
-        { status: 401 }
-      );
+    if (envUser && envPass && username === envUser && password === envPass) {
+      let superAdmin = await Admin.findOne({ username: envUser, role: 'superadmin' });
+      if (!superAdmin) {
+        superAdmin = await Admin.create({
+          username: envUser,
+          password: envPass,
+          role: 'superadmin',
+        });
+      } else {
+        const matches = await superAdmin.comparePassword(envPass);
+        if (!matches) {
+          superAdmin.password = envPass;
+          await superAdmin.save();
+        }
+      }
+
+      const { token, refreshToken } = generateTokens({
+        id: superAdmin._id.toString(),
+        username: superAdmin.username,
+        role: 'superadmin',
+        tokenVersion: superAdmin.tokenVersion ?? 0,
+      });
+
+      setTokenCookies(token, refreshToken);
+
+      return NextResponse.json({
+        success: true,
+        message: 'Superadmin login successful',
+        token,
+        refreshToken,
+        user: {
+          id: superAdmin._id,
+          username: superAdmin.username,
+          role: 'superadmin',
+        },
+      });
     }
 
-    // Verify password for the admin user
-    const isValid = await admin.comparePassword(password);
+    // Search for the user in both Admin and Cafe collections
+    // The input 'username' could be: username, email, or cafe slug
+    let admin = await Admin.findOne({ 
+      $or: [
+        { username: username },
+        { cafeSlug: username }
+      ]
+    });
+
+    // If not found in Admin by username/slug, check Cafe collection for email or username or slug
+    let cafe: any = null;
+    if (!admin) {
+      cafe = await Cafe.findOne({
+        $or: [
+          { username: username },
+          { email: username.toLowerCase() },
+          { slug: username.toLowerCase() }
+        ]
+      });
+
+      if (!cafe) {
+        return NextResponse.json(
+          { success: false, message: 'Invalid credentials' },
+          { status: 401 }
+        );
+      }
+
+      // If we found a cafe, find its associated admin
+      admin = await Admin.findOne({ 
+        username: cafe.username
+      });
+
+      // If no admin record exists yet for this cafe, we'll use the cafe record for login
+      if (!admin) {
+        // Check if password matches (hashed in Cafe model)
+        const cafeValid = await import('bcryptjs').then(m => m.default.compare(password, cafe.password));
+        if (!cafeValid) {
+          return NextResponse.json(
+            { success: false, message: 'Invalid credentials' },
+            { status: 401 }
+          );
+        }
+
+        // Generate tokens for cafe - include cafeName in the payload
+        const { token, refreshToken } = generateTokens({
+          id: cafe._id.toString(),
+          username: cafe.username,
+          role: 'cafeadmin',
+          cafeSlug: cafe.slug,
+          cafeName: cafe.cafeName, // Add cafeName here
+          tokenVersion: cafe.tokenVersion ?? 0,
+        });
+
+        setTokenCookies(token, refreshToken);
+
+        return NextResponse.json({
+          success: true,
+          message: 'Login successful',
+          token,
+          refreshToken,
+          user: {
+            id: cafe._id,
+            username: cafe.username,
+            role: 'cafeadmin',
+            cafeSlug: cafe.slug,
+            cafeName: cafe.cafeName,
+          },
+        });
+      }
+    }
+
+    // If we have an admin record (either found directly or via cafe)
+    // Verify password for Admin user
+    let isValid = await admin.comparePassword(password);
+
+    // Fallback migration path: if Admin compare fails, try Cafe password (handles historical double-hash issue)
+    if (!isValid) {
+      const cafeForMigration = await Cafe.findOne({ 
+        $or: [
+          { username: admin.username },
+          { slug: admin.cafeSlug }
+        ]
+      });
+      
+      if (cafeForMigration) {
+        const cafeValid = await import('bcryptjs').then(m => m.default.compare(password, cafeForMigration.password));
+        if (cafeValid) {
+          // Migrate admin password to correct hash based on provided password
+          admin.password = password; // pre-save hook will hash
+          await admin.save();
+          isValid = true;
+        }
+      }
+    }
 
     if (!isValid) {
       return NextResponse.json(
@@ -51,30 +172,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Ensure the admin is linked to a cafe
-    if (!admin.cafeSlug) {
-      return NextResponse.json(
-        { success: false, message: 'Admin account not linked to a cafe' },
-        { status: 403 } // Forbidden
-      );
+    // Get cafe details if not already fetched
+    if (!cafe) {
+      cafe = await Cafe.findOne({ slug: admin.cafeSlug });
     }
-
-    // Get cafe details for the response payload
-    const cafe = await Cafe.findOne({ slug: admin.cafeSlug });
 
     if (!cafe) {
       return NextResponse.json(
-        { success: false, message: `Cafe with slug '${admin.cafeSlug}' not found` },
+        { success: false, message: 'Cafe not found' },
         { status: 404 }
       );
     }
 
-    // Generate tokens
+    // Generate tokens - include cafeName in the payload
     const { token, refreshToken } = generateTokens({
       id: admin._id.toString(),
       username: admin.username,
-      role: 'cafeadmin',
+      role: admin.role,
       cafeSlug: cafe.slug,
+      cafeName: cafe.cafeName, // Add cafeName here
       tokenVersion: admin.tokenVersion ?? 0,
     });
 

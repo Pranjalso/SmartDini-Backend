@@ -33,7 +33,7 @@ export default function SuperAdminLogin() {
           setLoading(false);
           return;
         }
-        router.push("/admin");
+        window.location.href = "/admin";
       } catch (err) {
         setError("Network error. Please try again.");
         setLoading(false);

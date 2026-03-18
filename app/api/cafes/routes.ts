@@ -154,12 +154,13 @@ export const POST = withAuth(async (req: AuthRequest) => {
       cafe = createdCafe;
 
       // Create admin user for cafe
-      await Admin.create([{
+      const admin = new Admin({
         username: parsed.username,
         password: parsed.password, // Will be hashed by pre-save hook
         role: 'cafeadmin',
         cafeSlug: slug,
-      }], { session });
+      });
+      await admin.save({ session });
 
       // Commit the transaction
       await session.commitTransaction();
@@ -172,13 +173,15 @@ export const POST = withAuth(async (req: AuthRequest) => {
       session.endSession();
     }
 
-    // Prepare base URL for links - Use production URL if available
-    const productionUrl = 'https://smartdini-seven.vercel.app';
+    // Prepare base URL for links
+    const protocol = req.headers.get('x-forwarded-proto') || 'http';
+    const host = req.headers.get('host') || 'localhost:3000';
+    const origin = `${protocol}://${host}`;
+
     const baseUrl =
       process.env.NEXT_PUBLIC_APP_URL ||
-      productionUrl ||
-      req.nextUrl?.origin ||
-      `${req.headers.get('x-forwarded-proto') || 'http'}://${req.headers.get('host')}`;
+      origin ||
+      'https://smartdini-seven.vercel.app';
 
     const menuUrl = `${baseUrl}/${slug}/menu`;
     const adminUrl = `${baseUrl}/${slug}/admin`;

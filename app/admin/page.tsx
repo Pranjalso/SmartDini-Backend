@@ -166,34 +166,6 @@ const toastStyles = `
 export default function SuperAdmin() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'add' | 'manage'>('add');
-  const [isInitialized, setIsInitialized] = useState(false);
-
-  // --- PERFORMANCE OPTIMIZATION: LOAD CACHED DATA ON MOUNT ---
-  useEffect(() => {
-    try {
-      const cachedTab = window.sessionStorage.getItem('sd:admin:activeTab') as 'add' | 'manage';
-      if (cachedTab) setActiveTab(cachedTab);
-
-      const cachedCafes = window.sessionStorage.getItem('sd:admin:cafes');
-      if (cachedCafes) setCafes(JSON.parse(cachedCafes));
-
-      const cachedStats = window.sessionStorage.getItem('sd:admin:stats');
-      if (cachedStats) setStats(JSON.parse(cachedStats));
-    } catch (e) {
-      console.error('Error loading cached admin data:', e);
-    } finally {
-      setIsInitialized(true);
-    }
-  }, []);
-
-  // Persist tab changes
-  const handleTabChange = (tab: 'add' | 'manage') => {
-    setActiveTab(tab);
-    try {
-      window.sessionStorage.setItem('sd:admin:activeTab', tab);
-    } catch {}
-  };
-
   const [saving, setSaving] = useState(false);
   const [cafeName, setCafeName] = useState('');
   const [slug, setSlug] = useState('');
@@ -244,7 +216,7 @@ export default function SuperAdmin() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
-  const pageSize = 25;
+  const pageSize = 10;
   const [stats, setStats] = useState<{ total: number; active: number; inactive: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [cityFilter, setCityFilter] = useState<string>('All Cities');
@@ -282,10 +254,8 @@ export default function SuperAdmin() {
   // Auto-refresh session logic
   useEffect(() => {
     const refreshSession = async () => {
-      // Use production URL if in production, otherwise relative path
-      const refreshUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://smartdini-seven.vercel.app/api/auth/refresh' 
-        : '/api/auth/refresh';
+      // Use relative path which works on both localhost and production
+      const refreshUrl = '/api/auth/refresh';
         
       try {
         const res = await fetch(refreshUrl, {
@@ -453,10 +423,7 @@ export default function SuperAdmin() {
 
   // Fetch cafes for Manage tab
   const fetchCafes = () => {
-    // Show loading shimmer only if we have no data at all
-    if (cafes.length === 0) {
-      setLoading(true);
-    }
+    setLoading(true);
     const params = new URLSearchParams();
     if (cityFilter && cityFilter !== 'All Cities') params.set('city', cityFilter);
     if (statusFilter === 'active' || statusFilter === 'inactive') params.set('status', statusFilter);
@@ -469,13 +436,6 @@ export default function SuperAdmin() {
         const list = Array.isArray(data.data) ? data.data : [];
         setCafes(list);
         setStats(data.stats || null);
-        
-        // --- CACHE THE DATA ---
-        try {
-          window.sessionStorage.setItem('sd:admin:cafes', JSON.stringify(list));
-          if (data.stats) window.sessionStorage.setItem('sd:admin:stats', JSON.stringify(data.stats));
-        } catch {}
-
         if (cityFilter === 'All Cities') {
   // Extract cities, filter out null/undefined/empty values, and ensure they're strings
   const cities = list
@@ -622,14 +582,6 @@ export default function SuperAdmin() {
     };
   }, [showModal]);
 
-  if (!isInitialized) {
-    return (
-      <div className="dashboard-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-        <div className="shimmer" style={{ width: 100, height: 20 }} />
-      </div>
-    );
-  }
-
   return (
     <>
       <style>{toastStyles}</style>
@@ -741,13 +693,13 @@ export default function SuperAdmin() {
         <div className="tab-container">
           <button 
             className={`tab-btn ${activeTab === 'add' ? 'active' : ''}`} 
-            onClick={() => handleTabChange('add')}
+            onClick={() => setActiveTab('add')}
           >
             Add Cafes
           </button>
           <button 
             className={`tab-btn ${activeTab === 'manage' ? 'active' : ''}`} 
-            onClick={() => handleTabChange('manage')}
+            onClick={() => setActiveTab('manage')}
           >
             Manage Cafes
           </button>

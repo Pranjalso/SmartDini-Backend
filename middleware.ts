@@ -4,44 +4,84 @@ import type { NextRequest } from 'next/server';
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get('token')?.value;
-  const segments = pathname.split('/').filter(Boolean);
 
-  // Rule 1: Handle /admin and /admin/* routes
-  if (segments[0] === 'admin') {
+  // 1. Root Admin Routes (/admin, /admin/...)
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) {
     if (!token) {
-      return NextResponse.redirect(new URL('/adminlogin', req.url));
+      const url = req.nextUrl.clone();
+      url.pathname = '/adminlogin';
+      url.search = '';
+      return NextResponse.redirect(url);
     }
+
     try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      // Only superadmin can access /admin routes
-      if (payload?.role === 'superadmin') {
+      const part = token.split('.')[1] || '';
+      const base64 = part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '=');
+      // atob is available in Next.js middleware (Edge Runtime)
+      const json = atob(base64);
+      const payload = JSON.parse(json);
+      const { role } = payload;
+
+      // Superadmin can access root admin routes
+      if (role === 'superadmin') {
         return NextResponse.next();
       }
-      // All others are redirected
-      return NextResponse.redirect(new URL('/adminlogin', req.url));
+
+      // Industry standard: If not superadmin, redirect to admin login 
+      // (even if they are a cafeadmin, they need to log in as superadmin for these routes)
+      const url = req.nextUrl.clone();
+      url.pathname = '/adminlogin';
+      url.search = '';
+      return NextResponse.redirect(url);
     } catch {
-      // Invalid token
-      return NextResponse.redirect(new URL('/adminlogin', req.url));
+      const url = req.nextUrl.clone();
+      url.pathname = '/adminlogin';
+      url.search = '';
+      return NextResponse.redirect(url);
     }
   }
 
-  // Rule 2: Handle /:slug/admin and /:slug/admin/* routes
-  if (segments.length >= 2 && segments[1] === 'admin') {
-    const slug = segments[0];
+  // 2. Cafe Admin Routes (/:slug/admin, /:slug/admin/...)
+  const cafeAdminMatch = pathname.match(/^\/([^\/]+)\/admin(\/.*)?$/);
+  if (cafeAdminMatch) {
+    const slug = cafeAdminMatch[1];
+    
+    // Always require a token for any /:slug/admin route
     if (!token) {
-      return NextResponse.redirect(new URL(`/${slug}/adminlogin`, req.url));
+      const url = req.nextUrl.clone();
+      url.pathname = `/${slug}/adminlogin`;
+      url.search = '';
+      return NextResponse.redirect(url);
     }
+
     try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      // Allow superadmin OR the correct cafeadmin
-      if (payload?.role === 'superadmin' || (payload?.role === 'cafeadmin' && payload?.cafeSlug === slug)) {
+      const part = token.split('.')[1] || '';
+      const base64 = part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '=');
+      // atob is available in Next.js middleware (Edge Runtime)
+      const json = atob(base64);
+      const payload = JSON.parse(json);
+      const { role, cafeSlug } = payload;
+
+      // Superadmin can access ANY cafe admin route
+      if (role === 'superadmin') {
         return NextResponse.next();
       }
-      // All others are redirected
-      return NextResponse.redirect(new URL(`/${slug}/adminlogin`, req.url));
+
+      // Cafeadmin can only access their OWN cafe admin route
+      if (role === 'cafeadmin' && cafeSlug === slug) {
+        return NextResponse.next();
+      }
+
+      // Otherwise, redirect to that cafe's login page
+      const url = req.nextUrl.clone();
+      url.pathname = `/${slug}/adminlogin`;
+      url.search = '';
+      return NextResponse.redirect(url);
     } catch {
-      // Invalid token
-      return NextResponse.redirect(new URL(`/${slug}/adminlogin`, req.url));
+      const url = req.nextUrl.clone();
+      url.pathname = `/${slug}/adminlogin`;
+      url.search = '';
+      return NextResponse.redirect(url);
     }
   }
 

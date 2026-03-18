@@ -145,8 +145,8 @@ export default function CheckoutPage() {
         const res = await fetch(`/api/cafes/${menupages}/public`, { cache: 'no-store' });
         const json = await res.json();
         if (json?.success && json.data) {
-          const newTax = typeof json.data.taxRate === 'number' ? json.data.taxRate : 0;
-          const newShow = typeof json.data.showTax === 'boolean' ? json.data.showTax : false;
+          const newTax = typeof json.data.taxRate === 'number' ? json.data.taxRate : 5.0;
+          const newShow = typeof json.data.showTax === 'boolean' ? json.data.showTax : true;
           
           setTaxRate(newTax);
           setShowTax(newShow);
@@ -192,7 +192,7 @@ export default function CheckoutPage() {
   const uniqueItemsCount = useMemo(() => lines.length, [lines]);
   const totalQuantity = useMemo(() => lines.reduce((sum, l) => sum + l.qty, 0), [lines]);
   const subtotal = useMemo(() => lines.reduce((sum, l) => sum + l.price * l.qty, 0), [lines]);
-  const tax = useMemo(() => (showTax === true && taxRate > 0) ? Math.round(subtotal * (taxRate / 100)) : 0, [subtotal, taxRate, showTax]);
+  const tax = useMemo(() => (showTax === true) ? Math.round(subtotal * (taxRate / 100)) : 0, [subtotal, taxRate, showTax]);
   const total = useMemo(() => subtotal + tax, [subtotal, tax]);
 
   const updateQuantity = useCallback((itemId: string, change: number) => {
@@ -339,7 +339,7 @@ export default function CheckoutPage() {
                       setTableNumber(e.target.value);
                       if (error) setError("");
                     }}
-                    className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D32F2F]/20 ${
+                    className={`w-full px-4 py-3 bg-white border rounded-md focus:outline-none focus:ring-2 focus:ring-[#D32F2F]/20 ${
                       error ? "border-red-500" : "border-gray-300"
                     }`}
                     required
@@ -417,7 +417,7 @@ export default function CheckoutPage() {
                   </span>
                   <span className="font-medium">₹{subtotal}</span>
                 </div>
-                {showTax === true && taxRate > 0 && (
+                {showTax === true && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Tax ({taxRate}%)</span>
                     <span className="font-medium">₹{tax}</span>
@@ -433,7 +433,7 @@ export default function CheckoutPage() {
             </div>
 
               {error && (
-                <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
                   {error}
                 </div>
               )}

@@ -11,11 +11,11 @@ declare global {
   var mongoose: Cached;
 }
 
-let cached: Cached = global.mongoose || { conn: null, promise: null };
-
-if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
+if (!global.mongoose) {
+  global.mongoose = { conn: null, promise: null };
 }
+
+let cached: Cached = global.mongoose;
 
 async function connectDB() {
   if (!MONGODB_URI) {

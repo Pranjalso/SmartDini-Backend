@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { Package, Clock, Armchair, Check, X, Wallet, Smartphone, Loader2, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import useSWR, { mutate } from "swr";
 
 // ─── Types ───
 type OrderItem = {
@@ -51,8 +52,8 @@ const NewOrdersSkeleton = () => {
               </div>
               <div className="flex items-center gap-3">
                 <div className="h-6 w-16 bg-gray-300 rounded animate-pulse"></div>
-                <div className="h-8 w-20 bg-gray-300 rounded-lg animate-pulse"></div>
-                <div className="h-8 w-20 bg-gray-300 rounded-lg animate-pulse"></div>
+                <div className="h-8 w-20 bg-gray-300 rounded-md animate-pulse"></div>
+                <div className="h-8 w-20 bg-gray-300 rounded-md animate-pulse"></div>
               </div>
             </div>
             <div className="space-y-2">
@@ -71,43 +72,17 @@ export default function NewOrdersPage() {
   const slug = params?.menupages as string;
   const { toast } = useToast();
 
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
 
-  const fetchOrders = useCallback(async () => {
-    if (!slug) return;
-    try {
-      const res = await fetch(`/api/orders/${slug}?status=pending`);
-      const data = await res.json();
-      if (data.success) {
-        setOrders(data.data || []);
-      } else {
-        toast({
-          title: "Error",
-          description: data.message || "Failed to fetch orders",
-          variant: "destructive",
-        });
-      }
-    } catch (err: any) {
-      console.error("Failed to fetch orders:", err);
-      toast({
-        title: "Error",
-        description: err.message || "Failed to connect to server",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [slug, toast]);
+  const ordersUrl = slug ? `/api/orders/${slug}?status=pending` : null;
+  const { data, isLoading: swrLoading } = useSWR(ordersUrl, {
+    refreshInterval: 10000, // Poll every 10s
+    revalidateOnFocus: true,
+  });
 
-  useEffect(() => {
-    fetchOrders();
-    // Poll for new orders every 10 seconds (Industry standard for kitchen)
-    const interval = setInterval(fetchOrders, 10000);
-    return () => clearInterval(interval);
-  }, [fetchOrders]);
+  const orders = data?.success ? (data.data as Order[]) : [];
+  const loading = swrLoading;
 
   const handleUpdateStatus = async (orderId: string, newStatus: OrderStatus) => {
     setUpdating(orderId);
@@ -123,8 +98,9 @@ export default function NewOrdersPage() {
           title: `Order ${newStatus === 'preparing' ? 'Accepted' : 'Rejected'}`,
           description: `Order #${orders.find(o => o._id === orderId)?.orderNumber} has been ${newStatus === 'preparing' ? 'accepted and moved to preparing' : 'cancelled'}.`,
         });
-        // Optimistic update
-        setOrders(prev => prev.filter(o => o._id !== orderId));
+        
+        // Mutate the local cache
+        mutate(ordersUrl);
         
         // Dispatch global event to refresh sidebar stats
         window.dispatchEvent(new Event('refresh-admin-stats'));
@@ -189,7 +165,7 @@ export default function NewOrdersPage() {
           </h2>
           {loading && <Loader2 size={16} className="animate-spin text-gray-400" />}
         </div>
-        <span className="text-xs sm:text-sm bg-[#FEE2E2] text-[#D92632] px-3 py-1 rounded-full font-semibold whitespace-nowrap">
+        <span className="text-xs sm:text-sm bg-[#FEE2E2] text-[#D92632] px-3 py-1 rounded-md font-semibold whitespace-nowrap">
           {orders.length} New
         </span>
       </div>
@@ -236,7 +212,7 @@ export default function NewOrdersPage() {
                       </h3>
                       
                       {/* Payment Method Badge */}
-                      <div className={`flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full ${paymentBadge.bgColor} ${paymentBadge.textColor} text-[10px] sm:text-xs font-bold whitespace-nowrap`}>
+                      <div className={`flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md ${paymentBadge.bgColor} ${paymentBadge.textColor} text-[10px] sm:text-xs font-bold whitespace-nowrap`}>
                         <PaymentIcon size={10} strokeWidth={2.5} />
                         <span>{paymentBadge.label}</span>
                       </div>
@@ -267,7 +243,7 @@ export default function NewOrdersPage() {
                     <button
                       onClick={() => handleUpdateStatus(order._id, "preparing")}
                       disabled={isUpdating}
-                      className="flex items-center gap-0.5 sm:gap-1.5 bg-[#10B981] hover:bg-[#059669] text-white px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg text-[10px] sm:text-sm font-bold transition-colors shadow-sm disabled:opacity-50"
+                      className="flex items-center gap-0.5 sm:gap-1.5 bg-[#10B981] hover:bg-[#059669] text-white px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-md text-[10px] sm:text-sm font-bold transition-colors shadow-sm disabled:opacity-50"
                     >
                       <Check size={12} strokeWidth={3} />
                       <span className="sm:inline">Accept</span>
@@ -277,7 +253,7 @@ export default function NewOrdersPage() {
                     <button
                       onClick={() => handleUpdateStatus(order._id, "cancelled")}
                       disabled={isUpdating}
-                      className="flex items-center gap-0.5 sm:gap-1.5 bg-white border border-[#EF4444] text-[#EF4444] hover:bg-[#FEF2F2] px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg text-[10px] sm:text-sm font-bold transition-colors shadow-sm disabled:opacity-50"
+                      className="flex items-center gap-0.5 sm:gap-1.5 bg-white border border-[#EF4444] text-[#EF4444] hover:bg-[#FEF2F2] px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-md text-[10px] sm:text-sm font-bold transition-colors shadow-sm disabled:opacity-50"
                     >
                       <X size={12} strokeWidth={3} />
                       <span className="sm:inline">Reject</span>
@@ -320,7 +296,7 @@ export default function NewOrdersPage() {
                 <div className="mt-4 pt-3 border-t border-gray-200/50">
                   <button
                     onClick={() => setExpandedOrders(prev => ({ ...prev, [order._id]: !isExpanded }))}
-                    className="w-full flex items-center justify-center gap-1.5 py-1 text-[11px] sm:text-xs font-bold text-[#D92632] hover:bg-[#FEE2E2]/30 rounded-lg transition-colors"
+                    className="w-full flex items-center justify-center gap-1.5 py-1 text-[11px] sm:text-xs font-bold text-[#D92632] hover:bg-[#FEE2E2]/30 rounded-md transition-colors"
                   >
                     <span>{isExpanded ? 'Show Less' : 'View Details'}</span>
                     <ChevronDown size={14} className={`transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} />

@@ -15,16 +15,16 @@ const Footer = () => {
                 Serving over 500 cafes worldwide.
               </p>
               <div className="flex justify-center md:justify-start space-x-4">
-                <a href="#" className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center hover:bg-white/20 transition-colors">
+                <a href="#" className="w-10 h-10 bg-white/10 rounded-md flex items-center justify-center hover:bg-white/20 transition-colors">
                   <Facebook className="h-5 w-5" />
                 </a>
-                <a href="#" className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center hover:bg-white/20 transition-colors">
+                <a href="#" className="w-10 h-10 bg-white/10 rounded-md flex items-center justify-center hover:bg-white/20 transition-colors">
                   <Twitter className="h-5 w-5" />
                 </a>
-                <a href="#" className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center hover:bg-white/20 transition-colors">
+                <a href="#" className="w-10 h-10 bg-white/10 rounded-md flex items-center justify-center hover:bg-white/20 transition-colors">
                   <Instagram className="h-5 w-5" />
                 </a>
-                <a href="#" className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center hover:bg-white/20 transition-colors">
+                <a href="#" className="w-10 h-10 bg-white/10 rounded-md flex items-center justify-center hover:bg-white/20 transition-colors">
                   <Linkedin className="h-5 w-5" />
                 </a>
               </div>

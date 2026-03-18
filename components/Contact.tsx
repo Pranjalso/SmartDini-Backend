@@ -5,28 +5,33 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Mail, Phone, Clock, Send, Info } from "lucide-react";
+import { Mail, Phone, Clock, Send, Info, User, MapPin, Building, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import qrScanning from "@/assets/qr-scanning.jpg";
 
 const contactSchema = z.object({
-  contactNo: z.string().min(10, "Contact number must be at least 10 digits"),
+  fullName: z.string().min(2, "Full name must be at least 2 characters"),
+  contactNumber: z.string().min(10, "Contact number must be at least 10 digits"),
   email: z.string().email("Invalid email address"),
-  cafeLocation: z.string().min(3, "Cafe location must be at least 3 characters"),
-  cafeCity: z.string().min(3, "Cafe city must be at least 3 characters"),
+  city: z.string().min(2, "City must be at least 2 characters"),
+  cafeRestaurantName: z.string().min(2, "Cafe/Restaurant name must be at least 2 characters"),
+  needs: z.string().min(10, "Please describe your requirements in at least 10 characters"),
 });
 
 const Contact = () => {
   const [formData, setFormData] = useState({
-    contactNo: "",
+    fullName: "",
+    contactNumber: "",
     email: "",
-    cafeLocation: "",
-    cafeCity: "",
+    city: "",
+    cafeRestaurantName: "",
+    needs: "",
   });
   const [errors, setErrors] = useState<z.ZodError | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSubmittedRecently, setHasSubmittedRecently] = useState(false);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -42,6 +47,7 @@ const Contact = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors(null);
+    setShowSuccessMessage(false);
 
     const result = contactSchema.safeParse(formData);
     if (!result.success) {
@@ -66,17 +72,17 @@ const Contact = () => {
         throw new Error(data.message || "Something went wrong");
       }
 
-      toast({
-        title: "Request Sent Successfully!",
-        description: "We'll get back to you within 24 hours.",
-      });
-
-      // Reset form and set submission flag - FIXED: Use correct field names
+      // Show success message below the button
+      setShowSuccessMessage(true);
+      
+      // Reset form
       setFormData({ 
-        contactNo: "", 
+        fullName: "", 
+        contactNumber: "", 
         email: "", 
-        cafeLocation: "", 
-        cafeCity: "" 
+        city: "", 
+        cafeRestaurantName: "", 
+        needs: "" 
       });
       localStorage.setItem("lastContactSubmission", Date.now().toString());
       setHasSubmittedRecently(true);
@@ -98,6 +104,10 @@ const Contact = () => {
     });
   };
 
+  const getError = (path: string) => {
+    return errors?.issues.find((i) => i.path[0] === path)?.message;
+  };
+
   return (
     <section id="contact" className="section-padding bg-background">
       <div className="max-w-7xl mx-auto">
@@ -116,42 +126,58 @@ const Contact = () => {
           <div className="animate-on-scroll">
             <div className="bg-white rounded-2xl p-8 shadow-lg border border-border">
               <h3 className="text-2xl font-semibold mb-6">Contact Us</h3>
-              
-              {hasSubmittedRecently && (
-                <div className="bg-blue-100 border-l-4 border-green-500 text-green-700 p-4 rounded-md mb-6" role="alert">
-                  <div className="flex">
-                    <div className="py-1"><Info className="h-5 w-5 mr-3"/></div>
-                    <div>
-                      <p className="font-bold">Your request has been sent</p>
-                      <p className="text-sm">Thank you for your interest! We have received your message and will get back to you shortly.</p>
-                    </div>
-                  </div>
-                </div>
-              )}
 
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-5">
+                {/* Full Name | Contact Number - in one line */}
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="contactNo" className="block text-sm font-medium text-foreground mb-2">
-                      Contact No. *
+                    <label htmlFor="fullName" className="block text-sm font-medium text-foreground mb-2">
+                      <User className="inline h-4 w-4 mr-2 text-brand-red" />
+                      Full Name *
                     </label>
                     <Input
-                      id="contactNo"
-                      name="contactNo"
+                      id="fullName"
+                      name="fullName"
                       type="text"
                       required
-                      value={formData.contactNo}
+                      value={formData.fullName}
                       onChange={handleChange}
-                      placeholder="Your contact number"
-                      className={`border-border focus:border-primary ${errors?.issues.find(e => e.path[0] === 'contactNo') ? 'border-red-500' : ''}`}
+                      placeholder="Enter your full name"
+                      className={`border-border focus:border-primary ${getError("fullName") ? 'border-red-500' : ''}`}
                       disabled={hasSubmittedRecently}
                     />
-                    {errors?.issues.find(e => e.path[0] === 'contactNo') && (
-                      <p className="text-sm text-red-500 mt-1">{errors.issues.find(e => e.path[0] === 'contactNo')?.message}</p>
+                    {getError("fullName") && (
+                      <p className="text-sm text-red-500 mt-1">{getError("fullName")}</p>
                     )}
                   </div>
+
+                  <div>
+                    <label htmlFor="contactNumber" className="block text-sm font-medium text-foreground mb-2">
+                      <Phone className="inline h-4 w-4 mr-2 text-brand-red" />
+                      Contact Number *
+                    </label>
+                    <Input
+                      id="contactNumber"
+                      name="contactNumber"
+                      type="text"
+                      required
+                      value={formData.contactNumber}
+                      onChange={handleChange}
+                      placeholder="Your contact number"
+                      className={`border-border focus:border-primary ${getError("contactNumber") ? 'border-red-500' : ''}`}
+                      disabled={hasSubmittedRecently}
+                    />
+                    {getError("contactNumber") && (
+                      <p className="text-sm text-red-500 mt-1">{getError("contactNumber")}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Email | City - in one line */}
+                <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
+                      <Mail className="inline h-4 w-4 mr-2 text-brand-red" />
                       Email Address *
                     </label>
                     <Input
@@ -162,52 +188,77 @@ const Contact = () => {
                       value={formData.email}
                       onChange={handleChange}
                       placeholder="your@email.com"
-                      className={`border-border focus:border-primary ${errors?.issues.find(e => e.path[0] === 'email') ? 'border-red-500' : ''}`}
+                      className={`border-border focus:border-primary ${getError("email") ? 'border-red-500' : ''}`}
                       disabled={hasSubmittedRecently}
                     />
-                    {errors?.issues.find(e => e.path[0] === 'email') && (
-                      <p className="text-sm text-red-500 mt-1">{errors.issues.find(e => e.path[0] === 'email')?.message}</p>
+                    {getError("email") && (
+                      <p className="text-sm text-red-500 mt-1">{getError("email")}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label htmlFor="city" className="block text-sm font-medium text-foreground mb-2">
+                      <MapPin className="inline h-4 w-4 mr-2 text-brand-red" />
+                      City *
+                    </label>
+                    <Input
+                      id="city"
+                      name="city"
+                      type="text"
+                      required
+                      value={formData.city}
+                      onChange={handleChange}
+                      placeholder="Your city"
+                      className={`border-border focus:border-primary ${getError("city") ? 'border-red-500' : ''}`}
+                      disabled={hasSubmittedRecently}
+                    />
+                    {getError("city") && (
+                      <p className="text-sm text-red-500 mt-1">{getError("city")}</p>
                     )}
                   </div>
                 </div>
 
+                {/* Cafe/Restaurant Name - in one line */}
                 <div>
-                  <label htmlFor="cafeLocation" className="block text-sm font-medium text-foreground mb-2">
-                    Cafe Location *
+                  <label htmlFor="cafeRestaurantName" className="block text-sm font-medium text-foreground mb-2">
+                    <Building className="inline h-4 w-4 mr-2 text-brand-red" />
+                    Cafe/Restaurant Name *
                   </label>
                   <Input
-                    id="cafeLocation"
-                    name="cafeLocation"
+                    id="cafeRestaurantName"
+                    name="cafeRestaurantName"
                     type="text"
                     required
-                    value={formData.cafeLocation}
+                    value={formData.cafeRestaurantName}
                     onChange={handleChange}
-                    placeholder="Your cafe's location"
-                    className={`border-border focus:border-primary ${errors?.issues.find(e => e.path[0] === 'cafeLocation') ? 'border-red-500' : ''}`}
+                    placeholder="Your cafe/restaurant name"
+                    className={`border-border focus:border-primary ${getError("cafeRestaurantName") ? 'border-red-500' : ''}`}
                     disabled={hasSubmittedRecently}
                   />
-                  {errors?.issues.find(e => e.path[0] === 'cafeLocation') && (
-                    <p className="text-sm text-red-500 mt-1">{errors.issues.find(e => e.path[0] === 'cafeLocation')?.message}</p>
+                  {getError("cafeRestaurantName") && (
+                    <p className="text-sm text-red-500 mt-1">{getError("cafeRestaurantName")}</p>
                   )}
                 </div>
 
+                {/* Tell us about your needs - in one line */}
                 <div>
-                  <label htmlFor="cafeCity" className="block text-sm font-medium text-foreground mb-2">
-                    Cafe City *
+                  <label htmlFor="needs" className="block text-sm font-medium text-foreground mb-2">
+                    <MessageSquare className="inline h-4 w-4 mr-2 text-brand-red" />
+                    Tell us about your needs *
                   </label>
-                  <Input
-                    id="cafeCity"
-                    name="cafeCity"
-                    type="text"
+                  <Textarea
+                    id="needs"
+                    name="needs"
                     required
-                    value={formData.cafeCity}
+                    value={formData.needs}
                     onChange={handleChange}
-                    placeholder="Your cafe's city"
-                    className={`border-border focus:border-primary ${errors?.issues.find(e => e.path[0] === 'cafeCity') ? 'border-red-500' : ''}`}
+                    placeholder="Describe your current setup, number of tables, main challenges, or any specific requirements..."
+                    rows={5}
+                    className={`border-border focus:border-primary resize-none ${getError("needs") ? 'border-red-500' : ''}`}
                     disabled={hasSubmittedRecently}
                   />
-                  {errors?.issues.find(e => e.path[0] === 'cafeCity') && (
-                    <p className="text-sm text-red-500 mt-1">{errors.issues.find(e => e.path[0] === 'cafeCity')?.message}</p>
+                  {getError("needs") && (
+                    <p className="text-sm text-red-500 mt-1">{getError("needs")}</p>
                   )}
                 </div>
 
@@ -219,6 +270,25 @@ const Contact = () => {
                   <Send className={`mr-2 h-5 w-5 ${isLoading ? 'animate-pulse' : 'group-hover:translate-x-1'} transition-transform`} />
                   {isLoading ? "Sending..." : hasSubmittedRecently ? "Request Sent" : "Send Request"}
                 </Button>
+
+                {/* Success Message - Moved below the button */}
+                {showSuccessMessage && (
+                  <div className="mt-4 bg-green-50 border border-green-200 rounded-md p-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0">
+                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                          <Send className="h-4 w-4 text-green-600" />
+                        </div>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-green-800">Your request has been sent</p>
+                        <p className="text-sm text-green-700 mt-0.5">
+                          Thank you for your interest! We have received your message and will get back to you shortly.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </form>
 
               {/* Quick benefits */}
@@ -250,7 +320,7 @@ const Contact = () => {
               
               <div className="space-y-6">
                 <div className="flex items-start">
-                  <div className="w-10 h-10 bg-secondary rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
+                  <div className="w-10 h-10 bg-secondary rounded-md flex items-center justify-center mr-4 flex-shrink-0">
                     <Mail className="h-5 w-5 text-white" />
                   </div>
                   <div>
@@ -261,7 +331,7 @@ const Contact = () => {
                 </div>
 
                 <div className="flex items-start">
-                  <div className="w-10 h-10 bg-secondary rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
+                  <div className="w-10 h-10 bg-secondary rounded-md flex items-center justify-center mr-4 flex-shrink-0">
                     <Phone className="h-5 w-5 text-white" />
                   </div>
                   <div>
@@ -272,7 +342,7 @@ const Contact = () => {
                 </div>
 
                 <div className="flex items-start">
-                  <div className="w-10 h-10 bg-secondary rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
+                  <div className="w-10 h-10 bg-secondary rounded-md flex items-center justify-center mr-4 flex-shrink-0">
                     <Clock className="h-5 w-5 text-white" />
                   </div>
                   <div>
@@ -301,7 +371,7 @@ const Contact = () => {
                 <p className="text-sm opacity-90">Live demo available 24/7</p>
               </div>
               <div className="absolute top-6 right-6">
-                <button className="bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-white/30 transition-colors">
+                <button className="bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-white/30 transition-colors">
                   Try Demo
                 </button>
               </div>

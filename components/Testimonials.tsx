@@ -80,7 +80,7 @@ const Testimonials = () => {
               </p>
 
               {/* Stats highlight */}
-              <div className="bg-white rounded-lg p-3 mb-4 border border-border">
+              <div className="bg-white rounded-md p-3 mb-4 border border-border">
                 <div className="text-center">
                   <div className="text-lg font-bold text-secondary">{testimonial.stats}</div>
                   <div className="text-xs text-muted-foreground">Key Result</div>
@@ -115,7 +115,7 @@ const Testimonials = () => {
               {/* Results table */}
               <div className="space-y-4">
                 {caseStudy.results.map((result, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 bg-white rounded-lg border border-border">
+                  <div key={index} className="flex items-center justify-between p-4 bg-white rounded-md border border-border">
                     <div className="font-medium">{result.metric}</div>
                     <div className="flex items-center space-x-4">
                       <div className="text-sm text-muted-foreground">{result.before}</div>

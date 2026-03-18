@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Package, Clock, Armchair, Wallet, CreditCard, IndianRupee, ChevronDown, Search, Calendar, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import useSWR, { mutate } from "swr";
 
 // ─── Types ───
 type OrderItem = {
@@ -88,7 +89,7 @@ function OrderCard({ order }: { order: Order }) {
           {/* Payment Method Badge & Total */}
           <div className="flex flex-col items-end gap-0.5 sm:gap-1 flex-shrink-0">
             <div className={`
-              flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1.5 rounded-lg text-[8px] sm:text-xs font-bold whitespace-nowrap
+              flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1.5 rounded-md text-[8px] sm:text-xs font-bold whitespace-nowrap
               ${order.paymentMethod === 'upi'
                 ? 'bg-purple-100 text-purple-700' 
                 : 'bg-amber-100 text-amber-700'}
@@ -108,7 +109,7 @@ function OrderCard({ order }: { order: Order }) {
       </div>
 
       {/* Items Summary */}
-      <div className="bg-white rounded-lg sm:rounded-xl p-2 sm:p-3 mb-1 sm:mb-2">
+      <div className="bg-white rounded-md sm:rounded-xl p-2 sm:p-3 mb-1 sm:mb-2">
         <div className="flex items-center justify-between mb-1 sm:mb-2">
           <span className="text-[9px] sm:text-xs font-semibold text-gray-500">
             {order.items.length} items · {totalQuantity} quantity
@@ -166,6 +167,26 @@ function OrderCard({ order }: { order: Order }) {
   );
 }
 
+// ─── Orders Skeleton Loader ───
+const OrdersSkeleton = () => {
+  return (
+    <div className="animate-pulse space-y-4">
+      {[...Array(4)].map((_, i) => (
+        <div key={i} className="bg-[#F3F4F6] rounded-2xl p-4 mb-4 shadow-sm h-32">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0"></div>
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-24 bg-gray-200 rounded"></div>
+              <div className="h-3 w-32 bg-gray-200 rounded"></div>
+            </div>
+            <div className="h-8 w-20 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 // ─── Main Page Component ───
 export default function PaymentCompletedPage() {
   const params = useParams();
@@ -178,48 +199,45 @@ export default function PaymentCompletedPage() {
   const [dateFilter, setDateFilter] = useState<DateFilterOption>("today");
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getTodayDateString());
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
   
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const fetchOrders = useCallback(async () => {
-    if (!slug) return;
-    try {
-      let url = `/api/orders/${slug}?paymentStatus=completed`;
-      
-      const today = getTodayDateString();
-      if (selectedDate !== today) {
-        url += `&date=${selectedDate}`;
+  // Generate the URL based on filters
+  const getOrdersUrl = () => {
+    if (!slug) return null;
+    let url = `/api/orders/${slug}?paymentStatus=completed`;
+    
+    const today = getTodayDateString();
+    if (selectedDate !== today) {
+      url += `&date=${selectedDate}`;
+    } else {
+      const date = new Date();
+      if (dateFilter === "yesterday") {
+        date.setDate(date.getDate() - 1);
+        url += `&date=${date.toISOString().split('T')[0]}`;
+      } else if (dateFilter === "7d") {
+        const start = new Date();
+        start.setDate(start.getDate() - 7);
+        url += `&startDate=${start.toISOString()}&endDate=${new Date().toISOString()}`;
+      } else if (dateFilter === "30d") {
+        const start = new Date();
+        start.setDate(start.getDate() - 30);
+        url += `&startDate=${start.toISOString()}&endDate=${new Date().toISOString()}`;
       } else {
-        const date = new Date();
-        if (dateFilter === "yesterday") {
-          date.setDate(date.getDate() - 1);
-          url += `&date=${date.toISOString().split('T')[0]}`;
-        } else if (dateFilter === "7d") {
-          const start = new Date();
-          start.setDate(start.getDate() - 7);
-          url += `&startDate=${start.toISOString()}&endDate=${new Date().toISOString()}`;
-        } else if (dateFilter === "30d") {
-          const start = new Date();
-          start.setDate(start.getDate() - 30);
-          url += `&startDate=${start.toISOString()}&endDate=${new Date().toISOString()}`;
-        } else {
-          url += `&date=${today}`;
-        }
+        url += `&date=${today}`;
       }
-
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.success) {
-        setOrders(data.data || []);
-      }
-    } catch (err) {
-      console.error("Failed to fetch orders:", err);
-    } finally {
-      setLoading(false);
     }
-  }, [slug, selectedDate, dateFilter]);
+    return url;
+  };
+
+  const ordersUrl = getOrdersUrl();
+  const { data, isLoading: swrLoading } = useSWR(ordersUrl, (url: string) => fetch(url).then(res => res.json()), {
+    refreshInterval: 60000, // Poll every 60s
+    revalidateOnFocus: true,
+  });
+
+  const orders = data?.success ? (data.data as Order[]) : [];
+  const loading = swrLoading;
 
   // Handle order transition if orderIdParam is present
   useEffect(() => {
@@ -237,7 +255,8 @@ export default function PaymentCompletedPage() {
               title: "Payment Confirmed",
               description: `Order #${data.data.orderNumber} marked as completed.`,
             });
-            fetchOrders();
+            // Re-fetch orders
+            mutate(ordersUrl);
           }
         } catch (err) {
           console.error("Failed to mark order as paid:", err);
@@ -245,14 +264,7 @@ export default function PaymentCompletedPage() {
       }
     };
     markAsPaid();
-  }, [orderIdParam, slug, fetchOrders, toast]);
-
-  useEffect(() => {
-    fetchOrders();
-    // Poll for completed payments every 60 seconds
-    const interval = setInterval(fetchOrders, 60000);
-    return () => clearInterval(interval);
-  }, [fetchOrders]);
+  }, [orderIdParam, slug, ordersUrl, toast]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -335,7 +347,7 @@ export default function PaymentCompletedPage() {
               value={selectedDate}
               onChange={(e) => handleDatePickerChange(e.target.value)}
               max={getTodayDateString()}
-              className="w-full sm:w-[150px] lg:w-[160px] pl-8 sm:pl-10 pr-2 py-1.5 sm:py-2 bg-[#F9FAFB] border border-gray-200 rounded-lg text-[10px] sm:text-xs focus:outline-none focus:border-[#D92632] focus:ring-1 focus:ring-[#D92632]"
+              className="w-full sm:w-[150px] lg:w-[160px] pl-8 sm:pl-10 pr-2 py-1.5 sm:py-2 bg-[#F9FAFB] border border-gray-200 rounded-md text-[10px] sm:text-xs focus:outline-none focus:border-[#D92632] focus:ring-1 focus:ring-[#D92632]"
             />
           </div>
 
@@ -343,7 +355,7 @@ export default function PaymentCompletedPage() {
           <div className="relative flex-1 sm:flex-none" ref={dropdownRef}>
             <button 
               onClick={() => setShowDropdown(!showDropdown)}
-              className="w-full sm:w-[140px] lg:w-[150px] flex items-center gap-1 bg-[#FFEFEF] text-[#D92632] px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-bold border border-[#FECACA] hover:bg-[#FEE2E2] transition-colors justify-between"
+              className="w-full sm:w-[140px] lg:w-[150px] flex items-center gap-1 bg-[#FFEFEF] text-[#D92632] px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-[10px] sm:text-xs font-bold border border-[#FECACA] hover:bg-[#FEE2E2] transition-colors justify-between"
             >
               <span className="truncate">{getDateFilterDisplay()}</span>
               <ChevronDown size={12} strokeWidth={3} className={`flex-shrink-0 transform transition-transform ${showDropdown ? 'rotate-180' : ''}`} />
@@ -436,7 +448,7 @@ export default function PaymentCompletedPage() {
             placeholder="Search by order # or table..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-8 sm:pl-11 pr-3 sm:pr-4 py-2 sm:py-3 bg-[#F9FAFB] border border-gray-200 rounded-lg sm:rounded-xl text-xs sm:text-sm focus:outline-none focus:border-[#D92632] focus:ring-1 focus:ring-[#D92632] transition-all"
+            className="w-full pl-8 sm:pl-11 pr-3 sm:pr-4 py-2 sm:py-3 bg-[#F9FAFB] border border-gray-200 rounded-md sm:rounded-xl text-xs sm:text-sm focus:outline-none focus:border-[#D92632] focus:ring-1 focus:ring-[#D92632] transition-all"
           />
         </div>
       </div>
@@ -453,10 +465,7 @@ export default function PaymentCompletedPage() {
         </div>
 
         {loading && filteredOrders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 sm:py-20 text-gray-400 bg-[#F9FAFB] rounded-xl sm:rounded-2xl">
-            <Loader2 size={32} className="mb-2 sm:mb-4 animate-spin opacity-20" />
-            <p className="text-xs sm:text-sm font-medium">Loading orders...</p>
-          </div>
+          <OrdersSkeleton />
         ) : filteredOrders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 sm:py-20 text-gray-400 bg-[#F9FAFB] rounded-xl sm:rounded-2xl">
             <Package size={32} className="mb-2 sm:mb-4 opacity-20" />

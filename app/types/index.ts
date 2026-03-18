@@ -65,7 +65,10 @@ export interface JwtPayload {
   username: string;
   role: 'superadmin' | 'cafeadmin';
   cafeSlug?: string;
+  cafeName?: string;
   tokenVersion?: number;
+  iat?: number;  // Issued at timestamp
+  exp?: number;  // Expiration timestamp
 }
 
 export interface LoginResponse {
@@ -78,5 +81,6 @@ export interface LoginResponse {
     username: string;
     role: string;
     cafeSlug?: string;
+    cafeName?: string;
   };
 }
