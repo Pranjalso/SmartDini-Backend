@@ -25,6 +25,22 @@ const useToast = () => {
   return { toasts, toast, dismiss };
 };
 
+interface Cafe {
+  _id: string;
+  cafeName: string;
+  ownerName: string;
+  email?: string;
+  city: string;
+  location: string;
+  subscriptionPlan: string;
+  contactNumber?: string;
+  startDate: string;
+  endDate: string;
+  username: string;
+  slug: string;
+  isActive: boolean;
+}
+
 // Toast Components
 const ToastProvider = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
@@ -239,20 +255,20 @@ export default function SuperAdmin() {
   const cafesUrl = activeTab === 'manage' ? `/api/cafes?${paramsStr.toString()}` : null;
 
   const { data: swrData, isLoading: loading, error } = useSWR(cafesUrl, {
-    revalidateOnFocus: true,
-    onSuccess: (data) => {
-      if (data.success && data.data && cityFilter === 'All Cities') {
-        const cities = data.data
-          .map((c: any) => c.city)
-          .filter((city: any) => city && typeof city === 'string' && city.trim() !== '')
-          .map((city: string) => city.trim());
-        const unique = Array.from(new Set(cities)).sort();
-        setCityOptions(unique as string[]);
-      }
-    }
-  });
+     revalidateOnFocus: true,
+     onSuccess: (data) => {
+       if (data.success && data.data && cityFilter === 'All Cities') {
+         const cities = data.data
+           .map((c: Cafe) => c.city)
+           .filter((city: string) => city && typeof city === 'string' && city.trim() !== '')
+           .map((city: string) => city.trim());
+         const unique = Array.from(new Set(cities)).sort();
+         setCityOptions(unique as string[]);
+       }
+     }
+   });
 
-  const cafes = swrData?.success ? swrData.data : [];
+   const cafes: Cafe[] = swrData?.success ? swrData.data : [];
   const stats = swrData?.stats || { total: 0, active: 0, inactive: 0 };
 
   // Handle errors
@@ -814,7 +830,7 @@ export default function SuperAdmin() {
                       <td><div className="cell-content shimmer" style={{height: 14}} /></td>
                     </tr>
                   ))}
-                  {!loading && cafes.slice((page - 1) * pageSize, page * pageSize).map((cafe) => {
+                  {!loading && cafes.slice((page - 1) * pageSize, page * pageSize).map((cafe: Cafe) => {
                     const isExpired = cafe.subscriptionPlan !== 'Lifetime' && new Date(cafe.endDate) < new Date();
                     return (
                     <tr key={cafe._id}>
