@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '../../../../lib/db/connect';
-import Order from '../../../../lib/db/models/Order';
-import MenuItem from '../../../../lib/db/models/MenuItem';
-import Cafe from '../../../../lib/db/models/Cafe';
-import { withAuth, withCafeAccess } from '../../../../lib/auth/middleware';
-import { AuthRequest } from '../../../../lib/auth/middleware';
+import connectDB from '@/lib/db/connect';
+import Order from '@/lib/db/models/Order';
+import MenuItem from '@/lib/db/models/MenuItem';
+import Cafe from '@/lib/db/models/Cafe';
+import { withAuth, withCafeAccess } from '@/lib/auth/middleware';
+import { AuthRequest } from '@/lib/auth/middleware';
 import mongoose from 'mongoose';
-import { pusher } from '../../../../lib/pusher';
+import { pusher } from '@/lib/pusher';
 
 // Get orders for a cafe
 export const GET = withCafeAccess(async (
