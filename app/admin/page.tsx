@@ -1,6 +1,8 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import useSWR, { mutate } from 'swr';
+import './styles.css';
 
 // Custom toast hook with professional styling
 const useToast = () => {
@@ -138,32 +140,12 @@ const ToastClose = ({ onClick }: { onClick: () => void }) => {
   );
 };
 
-// Add animation styles
-const toastStyles = `
-  @keyframes slideIn {
-    from {
-      transform: translateX(100%);
-      opacity: 0;
-    }
-    to {
-      transform: translateX(0);
-      opacity: 1;
-    }
-  }
-  
-  @keyframes fadeOut {
-    from {
-      transform: translateX(0);
-      opacity: 1;
-    }
-    to {
-      transform: translateX(100%);
-      opacity: 0;
-    }
-  }
-`;
-
 export default function SuperAdmin() {
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'add' | 'manage'>('add');
   const [saving, setSaving] = useState(false);
@@ -211,14 +193,12 @@ export default function SuperAdmin() {
   };
 
   // Dynamic data for Manage tab
-  const [cafes, setCafes] = useState<Array<any>>([]);
   const [cityOptions, setCityOptions] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
-  const pageSize = 10;
-  const [stats, setStats] = useState<{ total: number; active: number; inactive: number } | null>(null);
-  const [loading, setLoading] = useState(false);
+  const pageSize = 25;
+
   const [cityFilter, setCityFilter] = useState<string>('All Cities');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
@@ -248,8 +228,43 @@ export default function SuperAdmin() {
     return rev[label] || 'demo';
   };
 
-  // refs for modal close on outside click
+  //refs for modal close on outside click
   const modalRef = useRef<HTMLDivElement>(null);
+
+  // --- DATA FETCHING WITH SWR ---
+  const paramsStr = new URLSearchParams();
+  if (cityFilter && cityFilter !== 'All Cities') paramsStr.set('city', cityFilter);
+  if (statusFilter === 'active' || statusFilter === 'inactive') paramsStr.set('status', statusFilter);
+  if (debouncedSearch) paramsStr.set('search', debouncedSearch);
+  const cafesUrl = activeTab === 'manage' ? `/api/cafes?${paramsStr.toString()}` : null;
+
+  const { data: swrData, isLoading: loading, error } = useSWR(cafesUrl, {
+    revalidateOnFocus: true,
+    onSuccess: (data) => {
+      if (data.success && data.data && cityFilter === 'All Cities') {
+        const cities = data.data
+          .map((c: any) => c.city)
+          .filter((city: any) => city && typeof city === 'string' && city.trim() !== '')
+          .map((city: string) => city.trim());
+        const unique = Array.from(new Set(cities)).sort();
+        setCityOptions(unique as string[]);
+      }
+    }
+  });
+
+  const cafes = swrData?.success ? swrData.data : [];
+  const stats = swrData?.stats || { total: 0, active: 0, inactive: 0 };
+
+  // Handle errors
+  useEffect(() => {
+    if (error) {
+      toast({
+        title: "❌ Failed to fetch cafes",
+        description: error.message || "Please check your connection",
+        type: "error"
+      });
+    }
+  }, [error]);
 
   // Auto-refresh session logic
   useEffect(() => {
@@ -399,8 +414,9 @@ export default function SuperAdmin() {
         setTimeout(() => {
           document.getElementById('successMsg')?.scrollIntoView({ behavior: 'smooth' });
         }, 100);
-        // Refresh Manage tab data
-        fetchCafes();
+
+        // Refresh Manage tab data if it exists
+        if (cafesUrl) mutate(cafesUrl);
         
         // Reset form
         setCafeName('');
@@ -421,43 +437,6 @@ export default function SuperAdmin() {
       });
   };
 
-  // Fetch cafes for Manage tab
-  const fetchCafes = () => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    if (cityFilter && cityFilter !== 'All Cities') params.set('city', cityFilter);
-    if (statusFilter === 'active' || statusFilter === 'inactive') params.set('status', statusFilter);
-    if (debouncedSearch) params.set('search', debouncedSearch);
-    const qs = params.toString() ? `?${params.toString()}` : '';
-    fetch(`/api/cafes${qs}`, { credentials: 'include' })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || 'Failed to fetch cafes');
-        const list = Array.isArray(data.data) ? data.data : [];
-        setCafes(list);
-        setStats(data.stats || null);
-        if (cityFilter === 'All Cities') {
-  // Extract cities, filter out null/undefined/empty values, and ensure they're strings
-  const cities = list
-    .map((c: any) => c.city)
-    .filter((city: any) => city && typeof city === 'string' && city.trim() !== '')
-    .map((city: string) => city.trim());
-  
-  // Get unique values
-  const unique = Array.from(new Set(cities)).sort();
-  
- 
-  setCityOptions(unique as string[]);
-}
-        setPage(1);
-      })
-      .catch(() => {
-        setCafes([]);
-        setStats({ total: 0, active: 0, inactive: 0 });
-      })
-      .finally(() => setLoading(false));
-  };
-
   // Toggle status
   const toggleCafeStatus = (slugValue: string, isActive: boolean) => {
     fetch(`/api/cafes/${slugValue}/status`, {
@@ -467,7 +446,7 @@ export default function SuperAdmin() {
       body: JSON.stringify({ isActive }),
     })
       .then((res) => {
-        fetchCafes();
+        if (cafesUrl) mutate(cafesUrl);
         toast({
           title: isActive ? "✅ Cafe Activated" : "⏸️ Cafe Deactivated",
           description: `Status updated successfully`,
@@ -482,17 +461,6 @@ export default function SuperAdmin() {
         });
       });
   };
-
-  // Load when switching to manage tab
-  useEffect(() => {
-    if (activeTab === 'manage') fetchCafes();
-  }, [activeTab]);
-
-  // Refetch on filter change while in Manage tab
-  useEffect(() => {
-    if (activeTab === 'manage') fetchCafes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cityFilter, statusFilter, debouncedSearch]);
 
   // Modal functions - Updated to include all fields including start date
   const openEditModal = (name: string, owner: string, city: string, email: string = '', location: string = '', currentPlan: string = '1', endDate: string = '', startDate: string = '', cafeSlug?: string, contactNumber: string = '', username: string = '') => {
@@ -547,7 +515,7 @@ export default function SuperAdmin() {
         throw new Error(data.message || 'Failed to update');
       }
       closeEditModal();
-      fetchCafes();
+      if (cafesUrl) mutate(cafesUrl);
       toast({
         title: "✅ Plan Extended Successfully",
         description: `${editName} now has ${subscriptionPlan} plan until ${new Date(editEndDate).toLocaleDateString()}`,
@@ -582,89 +550,24 @@ export default function SuperAdmin() {
     };
   }, [showModal]);
 
+  if (!isClient) {
+    return null;
+  }
+
   return (
     <>
-      <style>{toastStyles}</style>
-      <div className="dashboard-container">
-        {/* Toast Container */}
-        <div
-          style={{
-            position: 'fixed',
-            top: '20px',
-            right: '20px',
-            zIndex: 9999,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '10px',
-            maxWidth: '400px',
-            width: '100%',
-            pointerEvents: 'none',
-          }}
-        >
-          {toasts.map((toast) => (
-            <div
-              key={toast.id}
-              style={{
-                backgroundColor: toast.type === 'success' ? '#10b981' : toast.type === 'error' ? '#ef4444' : '#3b82f6',
-                color: 'white',
-                padding: '16px 20px',
-                borderRadius: '12px',
-                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-                animation: 'slideIn 0.3s ease-out',
-                position: 'relative',
-                width: '100%',
-                backdropFilter: 'blur(8px)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                pointerEvents: 'auto',
-              }}
-            >
-              <div style={{ 
-                fontWeight: 600, 
-                fontSize: '1rem', 
-                marginBottom: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                {toast.title}
-              </div>
-              {toast.description && (
-                <div style={{ 
-                  fontSize: '0.9rem', 
-                  opacity: 0.9,
-                  lineHeight: 1.5
-                }}>
-                  {toast.description}
-                </div>
-              )}
-              <button
-                onClick={() => dismissToast(toast.id)}
-                style={{
-                  position: 'absolute',
-                  top: '12px',
-                  right: '12px',
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'white',
-                  cursor: 'pointer',
-                  opacity: 0.7,
-                  fontSize: '18px',
-                  padding: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'opacity 0.2s',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-        </div>
+      <ToastProvider>
+        <ToastViewport />
+        {toasts.map(({ id, title, description, type }) => (
+          <Toast key={id} type={type} onOpenChange={(open) => !open && dismissToast(id)}>
+            <ToastTitle>{title}</ToastTitle>
+            {description && <ToastDescription>{description}</ToastDescription>}
+            <ToastClose onClick={() => dismissToast(id)} />
+          </Toast>
+        ))}
+      </ToastProvider>
 
-        {/* Header */}
+      <div className="dashboard-container">
         <header>
           <div className="brand">
             <h2>Smart<span>dini</span></h2>
@@ -897,7 +800,7 @@ export default function SuperAdmin() {
                   </tr>
                 </thead>
                 <tbody>
-                  {loading && Array.from({ length: 5 }).map((_, i) => (
+                  {loading && Array.from({ length: 10 }).map((_, i) => (
                     <tr key={`skeleton-${i}`}>
                       <td><div className="cell-content shimmer" style={{height: 14}} /></td>
                       <td><div className="cell-content shimmer" style={{height: 14}} /></td>
@@ -911,7 +814,9 @@ export default function SuperAdmin() {
                       <td><div className="cell-content shimmer" style={{height: 14}} /></td>
                     </tr>
                   ))}
-                  {!loading && cafes.slice((page - 1) * pageSize, page * pageSize).map((cafe) => (
+                  {!loading && cafes.slice((page - 1) * pageSize, page * pageSize).map((cafe) => {
+                    const isExpired = cafe.subscriptionPlan !== 'Lifetime' && new Date(cafe.endDate) < new Date();
+                    return (
                     <tr key={cafe._id}>
                       <td><div className="cell-content">{cafe.cafeName}</div></td>
                       <td><div className="cell-content">{cafe.ownerName}</div></td>
@@ -923,11 +828,12 @@ export default function SuperAdmin() {
                       <td><div className="cell-content">{cafe.username}</div></td>
                       <td>
                         <div className="status-wrapper">
-                          <label className="switch">
+                          <label className="switch" title={isExpired ? "Subscription expired. Extend plan to reactivate." : ""}>
                             <input
                               type="checkbox"
-                              checked={!!cafe.isActive}
+                              checked={!!cafe.isActive && !isExpired}
                               onChange={(e) => toggleCafeStatus(cafe.slug, e.target.checked)}
+                              disabled={isExpired}
                             />
                             <span className="slider"></span>
                           </label>
@@ -961,7 +867,8 @@ export default function SuperAdmin() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                   {!loading && cafes.length === 0 && (
                     <tr>
                       <td colSpan={10} style={{ textAlign: 'center', padding: 16, color: '#6b7280' }}>
@@ -1143,567 +1050,6 @@ export default function SuperAdmin() {
             </div>
           </div>
         )}
-
-        <style jsx global>{`
-          /* --- CSS VARIABLES & RESET --- */
-          :root {
-            --primary: #cb212d;
-            --primary-hover: #b01c26;
-            --primary-shadow: rgba(203, 33, 45, 0.35);
-            --success: #22c55e;
-            --success-shadow: rgba(34, 197, 94, 0.35);
-            --warning: #ffc107;
-            --dark: #2c3e50;
-            --light-bg: #f4f7fc;
-            --white: #ffffff;
-            --text-gray: #6c757d;
-            --border: #e2e8f0;
-            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-          }
-
-          .dashboard-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: var(--light-bg);
-            color: var(--dark);
-            font-family: 'Poppins', sans-serif;
-          }
-
-          /* --- HEADER --- */
-          header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            background: var(--white);
-            padding: 15px 25px;
-            border-radius: 12px;
-            box-shadow: var(--shadow);
-          }
-
-          .brand h2 { font-weight: 700; color: var(--dark); }
-          .brand span { color: var(--primary); }
-          .admin-profile { display: flex; align-items: center; gap: 10px; font-weight: 500; }
-          .admin-avatar { width: 40px; height: 40px; background: var(--primary); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; }
-          .btn-logout { background: #fff; border: 1px solid var(--border); color: var(--dark); padding: 8px 12px; border-radius: 8px; cursor: pointer; }
-          .btn-logout:hover { border-color: var(--primary); color: var(--primary); }
-
-          /* --- TOGGLE TABS --- */
-          .tab-container {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 30px;
-            background: var(--white);
-            padding: 10px;
-            border-radius: 50px;
-            width: fit-content;
-            margin-left: auto;
-            margin-right: auto;
-            box-shadow: var(--shadow);
-          }
-
-          .tab-btn {
-            padding: 12px 30px;
-            border: none;
-            background: transparent;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            border-radius: 40px;
-            color: var(--text-gray);
-            transition: all 0.3s ease;
-          }
-
-          .tab-btn.active {
-            background-color: var(--primary);
-            color: var(--white);
-            box-shadow: 0 4px 15px rgba(203, 33, 45, 0.3);
-          }
-
-          /* --- SECTIONS COMMON --- */
-          .dashboard-section { display: none; animation: fadeIn 0.4s ease; }
-          .dashboard-section.active { display: block; }
-
-          @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-
-          /* --- FORM STYLES (Add Cafe) --- */
-          .card {
-            background: var(--white);
-            padding: 30px;
-            border-radius: 16px;
-            box-shadow: var(--shadow);
-          }
-
-          .form-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-          }
-
-          .form-group label { display: block; margin-bottom: 8px; font-weight: 500; font-size: 0.9rem; color: var(--dark); }
-          .form-control {
-            width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; outline: none; transition: 0.3s;
-            background: #fafafa;
-          }
-          .form-control:focus { border-color: var(--primary); background: #fff; }
-          
-          .btn-primary {
-            background-color: var(--primary); color: white; border: none; padding: 14px 25px; border-radius: 8px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 20px; font-size: 1rem; transition: 0.3s;
-          }
-          .btn-primary:hover { background-color: var(--primary-hover); }
-          .btn-primary:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-          }
-
-          /* Success Message Area */
-          .success-box {
-            margin-top: 20px;
-            padding: 20px;
-            background: #e9f7ef;
-            border: 1px solid #c3e6cb;
-            border-radius: 8px;
-            color: #155724;
-            display: none;
-          }
-          .success-box h4 { margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
-          .link-row { margin-top: 5px; font-size: 0.9rem; }
-          .link-row a { color: var(--primary); font-weight: 600; text-decoration: none; }
-          .link-row span { font-weight: 600; color: #333; }
-
-          /* --- MANAGE CAFES (Stats & Filters) --- */
-          .stats-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 25px;
-          }
-          .stat-card {
-            background: var(--white);
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: var(--shadow);
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-          }
-          .stat-card::after{
-            content: "";
-            position: absolute;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            height: 6px;
-            background: var(--primary);
-            box-shadow: 0 6px 10px -2px var(--primary-shadow);
-          }
-          .stat-card.active::after{
-            background: var(--success);
-            box-shadow: 0 6px 10px -2px var(--success-shadow);
-          }
-          .stat-card.inactive::after{
-            background: var(--primary);
-            box-shadow: 0 6px 10px -2px var(--primary-shadow);
-          }
-          .stat-card h3 { font-size: 2rem; color: var(--dark); margin-bottom: 5px; }
-          .stat-card p { color: var(--text-gray); font-size: 0.9rem; font-weight: 500; }
-
-          .filter-bar {
-            display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;
-          }
-          .filter-select { padding: 10px; border-radius: 8px; border: 1px solid var(--border); min-width: 150px; }
-
-          /* --- TABLE - REDESIGNED FOR PROPER ALIGNMENT AND SCROLLING --- */
-          .table-wrapper {
-            background: var(--white);
-            border-radius: 12px;
-            box-shadow: var(--shadow);
-            overflow: hidden;
-            width: 100%;
-          }
-
-          .table-scroll {
-            overflow-x: auto;
-            overflow-y: auto;
-            max-height: 400px;
-            scrollbar-width: thin;
-            scrollbar-color: var(--primary) #f0f0f0;
-            -ms-overflow-style: none;  /* Hide scrollbar for IE and Edge */
-            scrollbar-width: none;  /* Hide scrollbar for Firefox */
-          }
-
-          /* Hide scrollbar for Chrome, Safari and Opera */
-          .table-scroll::-webkit-scrollbar {
-            display: none;
-          }
-
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 1200px;
-            table-layout: auto;
-          }
-
-          thead {
-            background: #f8f9fa;
-            border-bottom: 2px solid var(--border);
-            position: sticky;
-            top: 0;
-            z-index: 10;
-          }
-
-          th {
-            padding: 16px 12px;
-            text-align: left;
-            font-weight: 600;
-            color: var(--dark);
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            white-space: nowrap;
-            background: #f8f9fa;
-          }
-
-          td {
-            padding: 16px 12px;
-            border-bottom: 1px solid var(--border);
-            font-size: 0.9rem;
-            color: #444;
-            vertical-align: middle;
-          }
-
-          /* Cell content wrapper for consistent alignment */
-          .cell-content {
-            max-width: 200px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-          }
-
-          /* Status and action wrappers */
-          .status-wrapper, .action-wrapper {
-            display: flex;
-            align-items: center;
-            justify-content: flex-start;
-          }
-
-          tr:hover {
-            background-color: #fcfcfc;
-          }
-
-          tr:hover td {
-            background-color: #fcfcfc;
-          }
-
-          /* Status Toggle Switch */
-          .switch { 
-            position: relative; 
-            display: inline-block; 
-            width: 40px; 
-            height: 22px; 
-            margin: 0;
-          }
-          
-          .switch input { 
-            opacity: 0; 
-            width: 0; 
-            height: 0; 
-          }
-          
-          .slider { 
-            position: absolute; 
-            cursor: pointer; 
-            top: 0; 
-            left: 0; 
-            right: 0; 
-            bottom: 0; 
-            background-color: #ccc; 
-            transition: .4s; 
-            border-radius: 34px; 
-          }
-          
-          .slider:before { 
-            position: absolute; 
-            content: ""; 
-            height: 16px; 
-            width: 16px; 
-            left: 3px; 
-            bottom: 3px; 
-            background-color: white; 
-            transition: .4s; 
-            border-radius: 50%; 
-          }
-          
-          input:checked + .slider { 
-            background-color: var(--success); 
-          }
-          
-          input:checked + .slider:before { 
-            transform: translateX(18px); 
-          }
-
-          .btn-edit { 
-            background: #edf2f7; 
-            color: #000; 
-            border: none; 
-            padding: 8px 12px; 
-            border-radius: 6px; 
-            cursor: pointer; 
-            transition: 0.2s;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-          }
-          
-          .btn-edit:hover { 
-            background: #e2e8f0; 
-            color: var(--primary); 
-          }
-          
-          .btn-edit .icon-pencil { 
-            width: 16px; 
-            height: 16px; 
-            fill: currentColor; 
-            display: inline-block; 
-          }
-
-          /* Responsive table styles */
-          @media (max-width: 768px) {
-            .table-scroll {
-              max-height: 350px;
-            }
-            
-            th, td {
-              padding: 12px 8px;
-              font-size: 0.85rem;
-            }
-            
-            .cell-content {
-              max-width: 150px;
-            }
-          }
-
-          /* --- MODAL (Popup) Styles --- */
-          .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5);
-            display: none; justify-content: center; align-items: center; z-index: 1000;
-            padding: 20px;
-          }
-          .modal {
-            background: var(--white); 
-            width: 100%; 
-            max-width: 800px; 
-            border-radius: 16px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
-            animation: modalSlideUp 0.3s ease;
-            overflow: hidden;
-          }
-
-          @keyframes modalSlideUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-
-          .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px 24px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
-            color: white;
-            border-bottom: none;
-          }
-
-          .modal-header h3 {
-            margin: 0;
-            font-size: 1.3rem;
-            font-weight: 600;
-          }
-
-          .modal-close {
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            color: white;
-            font-size: 24px;
-            cursor: pointer;
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-            line-height: 1;
-            padding: 0;
-          }
-
-          .modal-close:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: rotate(90deg);
-          }
-
-          .modal-body {
-            padding: 24px;
-            max-height: 70vh;
-            overflow-y: auto;
-          }
-
-          .modal-form-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-          }
-
-          .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-          }
-
-          .form-row.full-width {
-            grid-template-columns: 1fr;
-          }
-
-          .form-group.full-width {
-            width: 100%;
-          }
-
-          .modal .form-group {
-            margin-bottom: 0;
-          }
-
-          .modal .form-group label {
-            font-weight: 500;
-            color: var(--dark);
-            margin-bottom: 6px;
-            font-size: 0.9rem;
-          }
-
-          .modal .form-control {
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 10px 12px;
-            width: 100%;
-            transition: all 0.2s;
-          }
-
-          .modal .form-control:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(203, 33, 45, 0.1);
-            outline: none;
-          }
-
-          .modal-footer {
-            display: flex;
-            justify-content: flex-end;
-            gap: 12px;
-            padding: 20px 24px;
-            background: #f8f9fa;
-            border-top: 1px solid var(--border);
-          }
-
-          .btn-cancel {
-            background: white;
-            color: var(--text-gray);
-            border: 1px solid var(--border);
-            padding: 10px 24px;
-            border-radius: 8px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-          }
-
-          .btn-cancel:hover {
-            background: #f1f1f1;
-            border-color: #cbd5e0;
-          }
-
-          .modal-footer .btn-primary {
-            width: auto;
-            margin-top: 0;
-            padding: 10px 28px;
-            border-radius: 8px;
-            font-weight: 500;
-          }
-
-          /* Responsive styles for modal */
-          @media (max-width: 640px) {
-            .form-row {
-              grid-template-columns: 1fr;
-              gap: 15px;
-            }
-            
-            .modal {
-              max-width: 95%;
-            }
-            
-            .modal-body {
-              padding: 20px;
-            }
-            
-            .modal-footer {
-              padding: 16px 20px;
-              flex-direction: column-reverse;
-            }
-            
-            .modal-footer .btn-primary,
-            .btn-cancel {
-              width: 100%;
-            }
-          }
-
-          .pagination {
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            gap: 12px;
-            padding: 12px 16px;
-          }
-          .btn-page {
-            padding: 8px 12px;
-            border: 1px solid var(--border);
-            background: #fff;
-            border-radius: 8px;
-            cursor: pointer;
-          }
-          .btn-page:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-          }
-          .page-info {
-            color: var(--text-gray);
-            font-size: 0.9rem;
-          }
-          .btn-edit:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-          }
-          .shimmer {
-            position: relative;
-            background: #e5e7eb;
-            border-radius: 6px;
-            overflow: hidden;
-          }
-          .shimmer::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -150px;
-            height: 100%;
-            width: 150px;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
-            animation: shimmer 1.2s infinite;
-          }
-          @keyframes shimmer {
-            0% { transform: translateX(0); }
-            100% { transform: translateX(300%); }
-          }
-        `}</style>
       </div>
     </>
   );

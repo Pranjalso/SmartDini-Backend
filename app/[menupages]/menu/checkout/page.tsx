@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, ShoppingCart, Minus, Plus, Trash2 } from "lucide-react";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 type CartLine = {
   id: string;
@@ -19,16 +22,124 @@ export default function CheckoutPage() {
   const router = useRouter();
   const menupages = params?.menupages as string;
   const [lines, setLines] = useState<CartLine[]>([]);
+  const [cartIds, setCartIds] = useState<string>("");
+
+  // Get cart IDs from localStorage
+  useEffect(() => {
+    if (!menupages) return;
+    const rawCart = window.localStorage.getItem(`sd:cart:${menupages}`);
+    if (rawCart) {
+      const quantities = JSON.parse(rawCart) as Record<string, number>;
+      const ids = Object.entries(quantities)
+        .filter(([_, qty]) => qty > 0)
+        .map(([id]) => id)
+        .join(',');
+      setCartIds(ids);
+    }
+  }, [menupages]);
+
+  // Use SWR for fetching cart items
+  const { data: menuData, isLoading: isMenuLoading } = useSWR(
+    menupages && cartIds ? `/api/menu/${menupages}?ids=${encodeURIComponent(cartIds)}` : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 60000,
+    }
+  );
+
+  useEffect(() => {
+    if (!menupages) return;
+    
+    // Initial load from session storage (very fast)
+    try {
+      const rawCart = window.localStorage.getItem(`sd:cart:${menupages}`);
+      const rawCatalog = window.sessionStorage.getItem(`sd:items:${menupages}`);
+      if (rawCart && rawCatalog) {
+        const quantities = JSON.parse(rawCart) as Record<string, number>;
+        const catalog = JSON.parse(rawCatalog) as any[];
+        const mapped = Object.entries(quantities)
+          .filter(([_, qty]) => qty > 0)
+          .map(([id, qty]) => {
+            const item = catalog.find(c => String(c.id) === String(id));
+            return item ? {
+              id: String(item.id),
+              name: item.name,
+              price: item.price,
+              qty: qty,
+              image: item.image,
+              description: item.description,
+            } : null;
+          }).filter(Boolean) as CartLine[];
+        if (mapped.length > 0) setLines(mapped);
+      }
+    } catch {}
+  }, [menupages]);
+
+  useEffect(() => {
+    if (menuData?.success && Array.isArray(menuData.data)) {
+      const rawCart = window.localStorage.getItem(`sd:cart:${menupages}`);
+      if (!rawCart) return;
+      const quantities = JSON.parse(rawCart) as Record<string, number>;
+      
+      const mapped: CartLine[] = menuData.data
+        .map((item: any): CartLine => ({
+          id: String(item._id),
+          name: item.name,
+          price: item.price,
+          qty: quantities[String(item._id)] || 0,
+          image: item.imageUrl,
+          description: item.description,
+        }))
+        .filter((item: CartLine) => item.qty > 0);
+      setLines(mapped);
+    }
+  }, [menuData, menupages]);
+
   const [tableNumber, setTableNumber] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "upi">("upi");
   const [submitting, setSubmitting] = useState(false);
   const [successOrder, setSuccessOrder] = useState<{ orderNumber: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false); // Default to false to show static/cached data
+  const isLoading = isMenuLoading;
   const [taxRate, setTaxRate] = useState(0);
   const [showTax, setShowTax] = useState<boolean | null>(null); // null means not yet loaded
 
-  // --- PERFORMANCE OPTIMIZATION: LOAD CACHED CAFE SETTINGS ---
+  // Prefetch payment page
+  useEffect(() => {
+    if (lines.length > 0 && tableNumber.trim()) {
+      router.prefetch(`/${menupages}/menu/checkout/payment`);
+    }
+  }, [lines, tableNumber, menupages, router]);
+
+  // --- PERFORMANCE OPTIMIZATION: USE SWR FOR CAFE DETAILS ---
+  const { data: cafeData } = useSWR(
+    menupages ? `/api/cafes/${menupages}/public` : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 60000,
+    }
+  );
+
+  useEffect(() => {
+    if (cafeData?.success && cafeData.data) {
+      const newTax = typeof cafeData.data.taxRate === 'number' ? cafeData.data.taxRate : 5.0;
+      const newShow = typeof cafeData.data.showTax === 'boolean' ? cafeData.data.showTax : true;
+      setTaxRate(newTax);
+      setShowTax(newShow);
+      
+      // Update session cache
+      try {
+        window.sessionStorage.setItem(`sd:cafeSettings:${menupages}`, JSON.stringify({ 
+          taxRate: newTax, 
+          showTax: newShow 
+        }));
+      } catch {}
+    }
+  }, [cafeData, menupages]);
+
+  // Load cart data from localStorage and sync with session cache
   useEffect(() => {
     if (!menupages) return;
     try {
@@ -39,129 +150,6 @@ export default function CheckoutPage() {
         if (st !== undefined) setShowTax(st);
       }
     } catch {}
-  }, [menupages]);
-
-  // Load cart data from localStorage and sync with session cache
-  useEffect(() => {
-    if (!menupages) return;
-    
-    let isMounted = true;
-    
-    const loadCart = async () => {
-      try {
-        // Get cart quantities from localStorage
-        const rawCart = window.localStorage.getItem(`sd:cart:${menupages}`);
-        if (!rawCart) {
-          if (isMounted) {
-            setLines([]);
-          }
-          return;
-        }
-        
-        const quantities = JSON.parse(rawCart) as Record<string, number>;
-        const entries = Object.entries(quantities).filter(([_, qty]) => qty > 0);
-        
-        if (entries.length === 0) {
-          if (isMounted) {
-            setLines([]);
-          }
-          return;
-        }
-
-        // --- PERFORMANCE OPTIMIZATION: USE SESSION CACHE FIRST ---
-        const rawCatalog = window.sessionStorage.getItem(`sd:items:${menupages}`);
-        const catalog: any[] = rawCatalog ? JSON.parse(rawCatalog) : [];
-        
-        const cachedLines: CartLine[] = entries.map(([id, qty]) => {
-          const item = catalog.find(c => String(c.id) === String(id));
-          if (item) {
-            return {
-              id: String(item.id),
-              name: item.name,
-              price: item.price,
-              qty: qty,
-              image: item.image,
-              description: item.description,
-            };
-          }
-          return null;
-        }).filter(Boolean) as CartLine[];
-
-        // If we have some cached lines, show them immediately
-        if (cachedLines.length > 0 && isMounted) {
-          setLines(cachedLines);
-        } else if (isMounted) {
-          // Only show loader if we have NO cached data for the items in cart
-          setIsLoading(true);
-        }
-        
-        // --- BACKGROUND REVALIDATION ---
-        const ids = entries.map(([id]) => id).join(',');
-        const res = await fetch(`/api/menu/${menupages}?ids=${encodeURIComponent(ids)}`, { 
-          cache: 'no-store' 
-        });
-        
-        if (!isMounted) return;
-        
-        const json = await res.json();
-        
-        if (json?.success && Array.isArray(json.data)) {
-          const mapped: CartLine[] = json.data
-            .map((item: any): CartLine => ({
-              id: String(item._id),
-              name: item.name,
-              price: item.price,
-              qty: quantities[String(item._id)] || 0,
-              image: item.imageUrl,
-              description: item.description,
-            }))
-            .filter((item: CartLine) => item.qty > 0);
-          
-          if (isMounted) {
-            setLines(mapped);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading cart:', error);
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-    
-    loadCart();
-    
-    return () => {
-      isMounted = false;
-    };
-  }, [menupages]);
-
-  // Fetch cafe details for tax rate
-  useEffect(() => {
-    if (!menupages) return;
-    const fetchCafeDetails = async () => {
-      try {
-        const res = await fetch(`/api/cafes/${menupages}/public`, { cache: 'no-store' });
-        const json = await res.json();
-        if (json?.success && json.data) {
-          const newTax = typeof json.data.taxRate === 'number' ? json.data.taxRate : 5.0;
-          const newShow = typeof json.data.showTax === 'boolean' ? json.data.showTax : true;
-          
-          setTaxRate(newTax);
-          setShowTax(newShow);
-          
-          // Update cache
-          window.sessionStorage.setItem(`sd:cafeSettings:${menupages}`, JSON.stringify({ 
-            taxRate: newTax, 
-            showTax: newShow 
-          }));
-        }
-      } catch (error) {
-        console.error('Error fetching cafe details:', error);
-      }
-    };
-    fetchCafeDetails();
   }, [menupages]);
 
   // Load persisted checkout state
@@ -325,6 +313,87 @@ export default function CheckoutPage() {
             </div>
           ) : lines.length > 0 && !successOrder ? (
             <>
+              <div className="bg-[#D32F2F]/5 rounded-xl p-3">
+                <p className="text-sm text-gray-600">
+                  <span className="font-semibold text-[#D32F2F]">{uniqueItemsCount}</span> different items ·{" "}
+                  <span className="font-semibold text-[#D32F2F]">{totalQuantity}</span> total quantity
+                </p>
+              </div>
+
+              <div className="bg-gray-50 rounded-xl p-4">
+                <h2 className="font-semibold mb-3">Order Summary</h2>
+                <div className="space-y-3">
+                  {lines.map((item) => (
+                    <div key={item.id} className="flex items-center gap-2.5 bg-sky-50 rounded-xl p-1.5 shadow-[0_4px_12px_rgba(59,130,246,0.12)] border border-sky-100">
+                      <div className="w-11 h-11 rounded-md overflow-hidden flex-shrink-0 bg-white">
+                        <img
+                          src={item.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100&h=100&fit=crop"}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100&h=100&fit=crop";
+                          }}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                        <div className="min-w-0 py-0.5">
+                          <h3 className="font-bold text-sm truncate text-gray-800 leading-tight">{item.name}</h3>
+                          <p className="text-[11px] text-gray-500 font-medium leading-tight mt-0.5">{item.price} * {item.qty}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                          <p className="font-bold text-xs text-[#D32F2F] leading-none">₹{item.price * item.qty}</p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => updateQuantity(item.id, -1)}
+                              className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center hover:bg-gray-200 transition-colors"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <span className="text-sm font-medium w-5 text-center">{item.qty}</span>
+                            <button
+                              onClick={() => updateQuantity(item.id, 1)}
+                              className="w-7 h-7 bg-[#D32F2F] text-white rounded-full flex items-center justify-center hover:bg-[#B71C1C] transition-colors"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => removeItem(item.id)}
+                              className="ml-1 p-1.5 text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-gray-50 rounded-xl p-4">
+                <h2 className="font-semibold mb-3">Price Details</h2>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">
+                      Subtotal ({uniqueItemsCount} {uniqueItemsCount === 1 ? 'item' : 'items'} · {totalQuantity} {totalQuantity === 1 ? 'quantity' : 'quantity'})
+                    </span>
+                    <span className="font-medium">₹{subtotal}</span>
+                  </div>
+                  {showTax === true && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Tax ({taxRate}%)</span>
+                      <span className="font-medium">₹{tax}</span>
+                    </div>
+                  )}
+                  <div className="border-t pt-2 mt-2">
+                    <div className="flex justify-between font-semibold">
+                      <span>Total</span>
+                      <span className="text-[#D32F2F]">₹{total}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="bg-gray-50 rounded-xl p-4" id="table-number-section">
                 <h2 className="font-semibold mb-3">
                   Table Number <span className="text-red-500">*</span>
@@ -350,87 +419,6 @@ export default function CheckoutPage() {
                   <p className="text-xs text-gray-500">eg. 01, 02, 03...</p>
                 </div>
               </div>
-
-              <div className="bg-[#D32F2F]/5 rounded-xl p-3">
-                <p className="text-sm text-gray-600">
-                  <span className="font-semibold text-[#D32F2F]">{uniqueItemsCount}</span> different items ·{" "}
-                  <span className="font-semibold text-[#D32F2F]">{totalQuantity}</span> total quantity
-                </p>
-              </div>
-
-              <div className="bg-gray-50 rounded-xl p-4">
-                <h2 className="font-semibold mb-3">Order Summary</h2>
-                <div className="space-y-3">
-                  {lines.map((item) => (
-                    <div key={item.id} className="flex items-center gap-2.5 bg-sky-50 rounded-xl p-1.5 shadow-[0_4px_12px_rgba(59,130,246,0.12)] border border-sky-100">
-                      <div className="w-11 h-11 rounded-md overflow-hidden flex-shrink-0 bg-white">
-                        <img
-                          src={item.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100&h=100&fit=crop"}
-                          alt={item.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100&h=100&fit=crop";
-                          }}
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-xs truncate text-gray-800">{item.name}</h3>
-                        <div className="flex items-center justify-between mt-0.5">
-                          <div>
-                            <p className="font-bold text-xs text-brand-red">₹{item.price * item.qty}</p>
-                            <p className="text-[10px] text-gray-500 font-medium">₹{item.price} * {item.qty}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => updateQuantity(item.id, -1)}
-                              className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center hover:bg-gray-200"
-                            >
-                              <Minus className="w-3 h-3" />
-                            </button>
-                            <span className="text-sm font-medium w-5 text-center">{item.qty}</span>
-                            <button
-                              onClick={() => updateQuantity(item.id, 1)}
-                              className="w-7 h-7 bg-[#D32F2F] text-white rounded-full flex items-center justify-center hover:bg-[#B71C1C]"
-                            >
-                              <Plus className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={() => removeItem(item.id)}
-                              className="ml-1 p-1.5 text-red-500 hover:bg-red-50 rounded-full"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-             <div className="bg-gray-50 rounded-xl p-4">
-              <h2 className="font-semibold mb-3">Price Details</h2>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">
-                    Subtotal ({uniqueItemsCount} {uniqueItemsCount === 1 ? 'item' : 'items'} · {totalQuantity} {totalQuantity === 1 ? 'quantity' : 'quantity'})
-                  </span>
-                  <span className="font-medium">₹{subtotal}</span>
-                </div>
-                {showTax === true && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Tax ({taxRate}%)</span>
-                    <span className="font-medium">₹{tax}</span>
-                  </div>
-                )}
-                <div className="border-t pt-2 mt-2">
-                  <div className="flex justify-between font-semibold">
-                    <span>Total</span>
-                    <span className="text-[#D32F2F]">₹{total}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
 
               {error && (
                 <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">

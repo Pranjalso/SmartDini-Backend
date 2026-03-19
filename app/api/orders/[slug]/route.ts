@@ -6,6 +6,7 @@ import Cafe from '@/lib/db/models/Cafe';
 import { withAuth, withCafeAccess } from '@/lib/auth/middleware';
 import { AuthRequest } from '@/lib/auth/middleware';
 import mongoose from 'mongoose';
+import { pusher } from '@/lib/pusher';
 
 // Get orders for a cafe
 export const GET = withCafeAccess(async (
@@ -216,6 +217,20 @@ export const POST = async (
       orderStatus: 'pending',
       upiId: body.upiId,
     });
+
+    // Trigger Pusher event
+    try {
+      await pusher.trigger(`cafe-${slug}`, 'new-order', {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        tableNumber: order.tableNumber,
+        total: order.total,
+        timestamp: order.createdAt,
+      });
+    } catch (pusherError) {
+      console.error('Pusher trigger failed:', pusherError);
+      // Don't block the response for this, just log it
+    }
 
     return NextResponse.json({
       success: true,

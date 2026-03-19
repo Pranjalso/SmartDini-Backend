@@ -196,6 +196,8 @@ export default function DashboardPage() {
       }))
     : [];
 
+  if (loading) return <DashboardSkeleton />;
+
   return (
     <div className="bg-white rounded-3xl shadow-sm p-4 sm:p-6 border border-gray-100 w-full min-h-[600px]">
       

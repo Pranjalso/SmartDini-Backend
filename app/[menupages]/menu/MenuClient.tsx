@@ -2,8 +2,11 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ShoppingCart, Plus, Minus, Scan, QrCode } from "lucide-react";
-import Image from "next/image";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 type MenuItem = {
   id: string | number;
@@ -21,12 +24,38 @@ type MenuClientProps = {
 };
 
 export default function MenuClient({ menupages, initialItems, initialCategories }: MenuClientProps) {
+  const router = useRouter();
   const [quantities, setQuantities] = useState<Record<string | number, number>>({});
   const [activeCategory, setActiveCategory] = useState<string>(initialCategories[0]?.name || "");
   const [uniqueItemsCount, setUniqueItemsCount] = useState(0);
   const [items, setItems] = useState<MenuItem[]>(initialItems);
   const [categories, setCategories] = useState<Array<{ name: string; image: string }>>(initialCategories);
-  const [loadingCategory, setLoadingCategory] = useState(false);
+  
+  // Use SWR for fetching category items
+  const { data: categoryData, isLoading: loadingCategory } = useSWR(
+    activeCategory ? `/api/menu/${menupages}?category=${encodeURIComponent(activeCategory)}` : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 60000, // 1 minute cache
+    }
+  );
+
+  // Update items when SWR data changes
+  useEffect(() => {
+    if (categoryData?.success && Array.isArray(categoryData.data)) {
+      const mapped = categoryData.data.map((item: any) => ({
+        id: item._id,
+        name: item.name,
+        price: item.price,
+        category: item.category,
+        image: item.imageUrl,
+        description: item.description,
+      })) as MenuItem[];
+      setItems(mapped);
+    }
+  }, [categoryData]);
+
   const [catalog, setCatalog] = useState<Array<{ id: string | number; name: string; price: number; image: string; description?: string }>>([]);
   const [fallbackLines, setFallbackLines] = useState<Array<{ id: string | number; name: string; price: number; image: string; description?: string }>>([]);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -100,43 +129,12 @@ export default function MenuClient({ menupages, initialItems, initialCategories 
     setUniqueItemsCount(count);
   }, [quantities]);
 
-  // Load items when activeCategory changes
+  // Prefetch critical pages
   useEffect(() => {
-    async function loadCategory() {
-      if (!activeCategory) return;
-      
-      // If we already have initialItems for the initial active category, 
-      // and this is the first load, we don't need to fetch immediately.
-      const isInitialCategory = activeCategory === initialCategories[0]?.name;
-      if (isInitialCategory && items.length > 0 && !isInitialized) {
-        return;
-      }
-
-      setLoadingCategory(true);
-      try {
-        const res = await fetch(`/api/menu/${menupages}?category=${encodeURIComponent(activeCategory)}`, { cache: 'no-store' });
-        const json = await res.json();
-        if (json?.success && Array.isArray(json.data)) {
-          const mapped = json.data.map((item: any) => ({
-            id: item._id,
-            name: item.name,
-            price: item.price,
-            category: item.category,
-            image: item.imageUrl,
-            description: item.description,
-          })) as MenuItem[];
-          setItems(mapped);
-        } else {
-          setItems([]);
-        }
-      } catch {
-        setItems([]);
-      } finally {
-        setLoadingCategory(false);
-      }
+    if (uniqueItemsCount > 0) {
+      router.prefetch(`/${menupages}/menu/checkout`);
     }
-    loadCategory();
-  }, [activeCategory, menupages]);
+  }, [uniqueItemsCount, menupages, router]);
 
   const updateQuantity = (item: MenuItem, change: number) => {
     const id = item.id;
@@ -235,12 +233,9 @@ export default function MenuClient({ menupages, initialItems, initialCategories 
         <header className="sticky top-0 z-10 bg-white px-4 py-3 border-b border-gray-100">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="relative p-2.5 bg-gray-100 rounded-md">
-                <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-brand-red rounded-tl-[3px]"></div>
-                <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-brand-red rounded-tr-[3px]"></div>
-                <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-brand-red rounded-bl-[3px]"></div>
-                <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-brand-red rounded-br-[3px]"></div>
-                <QrCode className="w-7 h-7 text-gray-500" />
+              <div className="relative p-2.5 bg-gradient-to-br from-brand-red/20 to-brand-red/5 rounded-lg">
+                <div className="absolute inset-0 border border-brand-red/30 rounded-lg"></div>
+                <Scan className="w-6 h-6 text-brand-red" />
               </div>
               <h1 className="text-2xl font-bold text-brand-red smartdiniFont tracking-tight">SmartDini</h1>
             </div>
@@ -258,9 +253,9 @@ export default function MenuClient({ menupages, initialItems, initialCategories 
         {/* Scrollable Content Area */}
         <div className="flex-1 overflow-y-auto pb-28">
           <div className="px-4 py-2">
-            <div className="bg-brand-red rounded-md p-3 text-white flex items-center gap-3">
-              <div className="w-12 h-12 rounded-md bg-white/20 flex items-center justify-center border border-white/20">
-                <Scan className="w-8 h-8 text-white" />
+            <div className="bg-brand-red rounded-lg p-3 text-white flex items-center gap-3">
+              <div className="w-12 h-12 rounded-lg bg-white/20 flex items-center justify-center border border-white/20">
+                <QrCode className="w-7 h-7 text-white" />
               </div>
               <div>
                 <h2 className="font-bold text-lg">Scan. Order. Enjoy.</h2>
@@ -323,7 +318,7 @@ export default function MenuClient({ menupages, initialItems, initialCategories 
                       className="flex items-center justify-between bg-sky-50 rounded-xl p-2 shadow-[0_4px_12px_rgba(59,130,246,0.15)] border border-sky-100"
                     >
                       <div className="flex items-center gap-3 flex-1">
-                        <div className="w-12 h-12 rounded-md overflow-hidden flex-shrink-0 shadow-sm bg-white">
+                        <div className="w-10 h-10 rounded-md overflow-hidden flex-shrink-0 shadow-sm bg-white">
                           <img 
                             src={item.image} 
                             alt={item.name}
@@ -341,31 +336,31 @@ export default function MenuClient({ menupages, initialItems, initialCategories 
                       </div>
 
                       <div className="flex-shrink-0 ml-2">
-                        {qty === 0 ? (
+                      {qty === 0 ? (
+                        <button
+                          onClick={() => updateQuantity(item, 1)}
+                          className="px-6 py-2 bg-white text-brand-red border-2 border-brand-red/30 rounded-lg text-xs font-bold hover:bg-brand-red hover:text-white transition-all shadow-sm hover:shadow-md min-w-[70px]"
+                        >
+                          ADD
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-2 bg-white border-2 border-brand-red/30 rounded-lg p-1 shadow-sm">
+                          <button
+                            onClick={() => updateQuantity(item, -1)}
+                            className="w-7 h-7 bg-brand-red/10 text-brand-red rounded-md flex items-center justify-center hover:bg-brand-red hover:text-white transition-colors"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="w-6 text-center font-bold text-sm text-brand-red">{qty}</span>
                           <button
                             onClick={() => updateQuantity(item, 1)}
-                            className="px-5 py-1.5 bg-brand-red text-white rounded-md text-[10px] font-bold hover:bg-brand-red/90 transition-colors shadow-sm"
+                            className="w-7 h-7 bg-brand-red/10 text-brand-red rounded-md flex items-center justify-center hover:bg-brand-red hover:text-white transition-colors"
                           >
-                            ADD
+                            <Plus className="w-3.5 h-3.5" />
                           </button>
-                        ) : (
-                          <div className="flex items-center gap-1.5 bg-brand-red text-white rounded-md p-1 shadow-sm">
-                            <button
-                              onClick={() => updateQuantity(item, -1)}
-                              className="w-6 h-6 bg-white/10 rounded flex items-center justify-center hover:bg-white/20"
-                            >
-                              <Minus className="w-3.5 h-3.5" />
-                            </button>
-                            <span className="w-4 text-center font-bold text-xs">{qty}</span>
-                            <button
-                              onClick={() => updateQuantity(item, 1)}
-                              className="w-6 h-6 bg-white/10 rounded flex items-center justify-center hover:bg-white/20"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
+                    </div>
                     </div>
                   );
                 })}

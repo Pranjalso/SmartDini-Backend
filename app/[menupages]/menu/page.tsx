@@ -35,36 +35,26 @@ export default async function MenuPage({ params }: PageProps) {
     // Cafe exists and is active, fetch initial data
     const fallbackCatImg = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100&h=100&fit=crop";
 
-    // Fetch categories directly from DB
-    let initialCategories: Array<{ name: string; image: string }> = [];
-    try {
-      const cats = await getMenuCategories(menupages);
-      if (Array.isArray(cats)) {
-        initialCategories = cats.map((c: any) => ({ name: c.name, image: c.image || fallbackCatImg }));
-      }
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-    }
+    // Fetch categories first to know which items to fetch, then parallelize
+    const cats = await getMenuCategories(menupages);
+    const firstCat = cats?.[0]?.name;
+    
+    // In parallel, map categories and fetch items
+    const [initialCategories, initialItemsRaw] = await Promise.all([
+      Promise.resolve(Array.isArray(cats) ? cats.map((c: any) => ({ name: c.name, image: c.image || fallbackCatImg })) : []),
+      firstCat ? getMenuItems(menupages, firstCat) : Promise.resolve([])
+    ]);
 
-    // Fetch first category's items directly from DB for initial render
     let initialItems: any[] = [];
-    const firstCat = initialCategories[0]?.name;
-    if (firstCat) {
-      try {
-        const items = await getMenuItems(menupages, firstCat);
-        if (Array.isArray(items)) {
-          initialItems = items.map((item: any) => ({
-            id: String(item._id),
-            name: item.name,
-            price: item.price,
-            category: item.category,
-            image: item.imageUrl,
-            description: item.description,
-          }));
-        }
-      } catch (error) {
-        console.error('Error fetching menu items:', error);
-      }
+    if (Array.isArray(initialItemsRaw)) {
+      initialItems = initialItemsRaw.map((item: any) => ({
+        id: String(item._id),
+        name: item.name,
+        price: item.price,
+        category: item.category,
+        image: item.imageUrl,
+        description: item.description,
+      }));
     }
 
     // Pass the fetched data to the client component

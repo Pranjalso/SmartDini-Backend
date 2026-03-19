@@ -19,7 +19,7 @@ export function useAuth() {
   const params = useParams();
   const menupages = params?.menupages as string;
 
-  const { data, error, isLoading, mutate } = useSWR('/api/auth/me', async (url) => {
+  const fetcher = useCallback(async (url: string) => {
     const res = await fetch(url, { credentials: 'include' });
     if (!res.ok) {
       if (res.status === 401) {
@@ -33,7 +33,9 @@ export function useAuth() {
       throw new Error('Unauthorized');
     }
     return res.json();
-  }, {
+  }, []);
+
+  const { data, error, isLoading, mutate } = useSWR('/api/auth/me', fetcher, {
     revalidateOnFocus: false,
     revalidateIfStale: true,
     dedupingInterval: 60000, // Cache for 1 min

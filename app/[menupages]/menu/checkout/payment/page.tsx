@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Smartphone, Wallet, CheckCircle } from "lucide-react";
+import { ArrowLeft, Smartphone, Wallet } from "lucide-react";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 type PaymentMethod = "upi" | "cash";
 
@@ -22,7 +25,6 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("upi");
   const [upiId, setUpiId] = useState("");
   const [processing, setProcessing] = useState(false);
-  const [paymentComplete, setPaymentComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tableNumber, setTableNumber] = useState("");
   const [lines, setLines] = useState<Array<{ id: string; name: string; price: number; qty: number; image?: string; description?: string }>>([]);
@@ -30,6 +32,40 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
   const [taxRate, setTaxRate] = useState(0);
   const [showTax, setShowTax] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Prefetch confirmation page
+  useEffect(() => {
+    if (orderNumber) {
+      router.prefetch(`/${menupages}/menu/order-confirmation?orderNumber=${orderNumber}`);
+    }
+  }, [orderNumber, menupages, router]);
+
+  // --- PERFORMANCE OPTIMIZATION: USE SWR FOR CAFE DETAILS ---
+  const { data: cafeData } = useSWR(
+    menupages ? `/api/cafes/${menupages}/public` : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 60000,
+    }
+  );
+
+  useEffect(() => {
+    if (cafeData?.success && cafeData.data) {
+      const newTax = typeof cafeData.data.taxRate === 'number' ? cafeData.data.taxRate : 5.0;
+      const newShow = typeof cafeData.data.showTax === 'boolean' ? cafeData.data.showTax : true;
+      setTaxRate(newTax);
+      setShowTax(newShow);
+      
+      // Update session cache
+      try {
+        window.sessionStorage.setItem(`sd:cafeSettings:${menupages}`, JSON.stringify({ 
+          taxRate: newTax, 
+          showTax: newShow 
+        }));
+      } catch {}
+    }
+  }, [cafeData, menupages]);
 
   // --- PERFORMANCE OPTIMIZATION: LOAD CACHED CAFE SETTINGS ---
   useEffect(() => {
@@ -154,33 +190,6 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
     }
   }, [menupages]);
 
-  // Fetch cafe details for tax rate
-  useEffect(() => {
-    if (!menupages) return;
-    const fetchCafeDetails = async () => {
-      try {
-        const res = await fetch(`/api/cafes/${menupages}/public`, { cache: 'no-store' });
-        const json = await res.json();
-        if (json?.success && json.data) {
-          const newTax = typeof json.data.taxRate === 'number' ? json.data.taxRate : 5.0;
-          const newShow = typeof json.data.showTax === 'boolean' ? json.data.showTax : true;
-          
-          setTaxRate(newTax);
-          setShowTax(newShow);
-          
-          // Update cache
-          window.sessionStorage.setItem(`sd:cafeSettings:${menupages}`, JSON.stringify({ 
-            taxRate: newTax, 
-            showTax: newShow 
-          }));
-        }
-      } catch (error) {
-        console.error('Error fetching cafe details:', error);
-      }
-    };
-    fetchCafeDetails();
-  }, [menupages]);
-
   // Derived totals
   const subtotal = useMemo(() => lines.reduce((sum, l) => sum + l.price * l.qty, 0), [lines]);
   const tax = useMemo(() => (showTax === true) ? Math.round(subtotal * (taxRate / 100)) : 0, [subtotal, taxRate, showTax]);
@@ -225,41 +234,18 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
       }
       const order = json.data;
       setOrderNumber(order.orderNumber);
-      setPaymentComplete(true);
       try {
         window.localStorage.removeItem(`sd:cart:${menupages}`);
       } catch {}
       
-      // Redirect to order confirmation page after 2 seconds
-      setTimeout(() => {
-        router.push(`/${menupages}/menu/order-confirmation?orderNumber=${order.orderNumber}`);
-      }, 2000);
+      // Direct redirect to order confirmation page
+      router.push(`/${menupages}/menu/order-confirmation?orderNumber=${order.orderNumber}`);
     } catch (e: any) {
       setError(e?.message || "Failed to process payment");
     } finally {
       setProcessing(false);
     }
   };
-
-  if (paymentComplete) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-md mx-auto bg-white min-h-screen flex items-center justify-center p-8">
-          <div className="text-center">
-            <div className="w-20 h-20 bg-green-100 rounded-full mx-auto mb-4 flex items-center justify-center">
-              <CheckCircle className="w-10 h-10 text-green-600" />
-            </div>
-            <h2 className="text-xl font-bold mb-2">Order Placed Successfully!</h2>
-            <p className="text-sm text-gray-600 mb-2">Your order has been placed</p>
-            {orderNumber && (
-              <p className="text-sm font-semibold text-[#D32F2F] mb-4">Order #{orderNumber}</p>
-            )}
-            <p className="text-xs text-gray-500">Redirecting to order confirmation...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -300,29 +286,6 @@ function PaymentPageContent({ menupages }: { menupages: string }) {
               className={`w-full px-4 py-3 bg-white border rounded-md focus:outline-none focus:ring-2 focus:ring-[#D32F2F]/20 ${error ? "border-red-500" : "border-gray-300"}`}
               required
             />
-          </div>
-
-          {/* Order Summary / Price Details */}
-          <div className="bg-gray-50 rounded-xl p-4">
-            <h2 className="font-semibold mb-3">Price Details</h2>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Subtotal</span>
-                <span className="font-medium">₹{subtotal}</span>
-              </div>
-              {showTax === true && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Tax ({taxRate}%)</span>
-                  <span className="font-medium">₹{tax}</span>
-                </div>
-              )}
-              <div className="border-t pt-2 mt-2">
-                <div className="flex justify-between font-semibold">
-                  <span>Total</span>
-                  <span className="text-[#D32F2F]">₹{total}</span>
-                </div>
-              </div>
-            </div>
           </div>
 
           {/* Payment Methods */}

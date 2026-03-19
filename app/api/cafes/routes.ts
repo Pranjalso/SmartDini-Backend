@@ -44,10 +44,21 @@ export const GET = withAuth(async (req: AuthRequest) => {
 
     const cafes = await Cafe.find(query).sort({ createdAt: -1 });
 
-    // Get counts - FIX: Handle empty database case
+    // Get counts - include expired in inactive count for accuracy
+    const now = new Date();
     const totalCafes = await Cafe.countDocuments();
-    const activeCafes = await Cafe.countDocuments({ isActive: true });
-    const inactiveCafes = await Cafe.countDocuments({ isActive: false });
+    
+    // Active means isActive is true AND (subscription is Lifetime OR endDate is in the future)
+    const activeCafes = await Cafe.countDocuments({ 
+      isActive: true,
+      $or: [
+        { subscriptionPlan: 'Lifetime' },
+        { endDate: { $gt: now } }
+      ]
+    });
+    
+    // Inactive means isActive is false OR (subscription is not Lifetime AND endDate is in the past)
+    const inactiveCafes = totalCafes - activeCafes;
 
     return NextResponse.json({
       success: true,
