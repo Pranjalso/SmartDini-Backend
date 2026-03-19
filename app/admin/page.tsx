@@ -781,7 +781,7 @@ export default function SuperAdmin() {
               aria-label="Filter by city"
             >
               <option>All Cities</option>
-              {cityOptions.map((city) => (
+              {cityOptions.map((city: string) => (
                 <option key={city} value={city}>{city}</option>
               ))}
             </select>
@@ -816,7 +816,7 @@ export default function SuperAdmin() {
                   </tr>
                 </thead>
                 <tbody>
-                  {loading && Array.from({ length: 10 }).map((_, i) => (
+                  {loading && Array.from({ length: 10 }).map((_: any, i: number) => (
                     <tr key={`skeleton-${i}`}>
                       <td><div className="cell-content shimmer" style={{height: 14}} /></td>
                       <td><div className="cell-content shimmer" style={{height: 14}} /></td>
