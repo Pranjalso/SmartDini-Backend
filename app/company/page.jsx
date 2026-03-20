@@ -119,7 +119,7 @@ const CompanyPage = () => {
                   </div>
                   <div className="absolute -bottom-6 -right-6 bg-white p-6 rounded-xl shadow-lg w-1/2">
                     <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 bg-primary/10 rounded-md flex items-center justify-center">
+                      <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
                           width="16"
@@ -382,7 +382,7 @@ const CompanyPage = () => {
                   </div>
                   <div className="absolute -bottom-6 -left-6 bg-white p-6 rounded-xl shadow-lg w-2/3">
                     <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 bg-primary/10 rounded-md flex items-center justify-center">
+                      <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
                         <Zap className="text-primary" size={20} />
                       </div>
                       <h3 className="font-bold text-gray-900">

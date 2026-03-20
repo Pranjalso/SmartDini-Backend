@@ -130,17 +130,14 @@ const Footer = () => {
         <div className="border-t border-white/20 py-6 md:py-8">
           <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
             <div className="text-white/60 text-sm">
-              © 2024 Smartdini All rights reserved.
+              © 2026 Smartdini All rights reserved.
             </div>
             <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm">
-              <a href="#" className="text-white/60 hover:text-white transition-colors">
+              <a href="/privacy-policy" className="text-white/60 hover:text-white transition-colors">
                 Privacy Policy
               </a>
-              <a href="#" className="text-white/60 hover:text-white transition-colors">
+              <a href="/terms-and-conditions" className="text-white/60 hover:text-white transition-colors">
                 Terms of Service
-              </a>
-              <a href="#" className="text-white/60 hover:text-white transition-colors">
-                Cookie Policy
               </a>
             </div>
           </div>
