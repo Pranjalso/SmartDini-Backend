@@ -56,7 +56,7 @@ const benefits = [
 export default function Benefits() {
   return (
     <section className="section-padding bg-white">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <div className="text-center mb-16">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">
             Transform Your{" "}
@@ -73,7 +73,10 @@ export default function Benefits() {
             const Icon = benefit.icon;
 
             return (
-              <div key={index} className="group feature-card">
+              <div
+                key={index}
+                className="group feature-card max-w-sm mx-auto border border-gray-300 rounded-xl p-6 transition-transform duration-300 hover:scale-105"
+              >
                 <div className="relative">
                   <div className="w-16 h-16 bg-brand-red rounded-xl flex items-center justify-center mb-6">
                     <Icon className="h-8 w-8 text-white" />
@@ -84,7 +87,7 @@ export default function Benefits() {
                   </div>
                 </div>
 
-                <h3 className="text-xl font-semibold mb-3">
+                <h3 className="text-xl font-semibold mb-3 group-hover:text-primary transition-colors duration-300">
                   {benefit.title}
                 </h3>
                 <p className="text-muted-foreground">

@@ -40,7 +40,7 @@ export default function HomeClient() {
     <div className="min-h-screen">
       <ScrollAnimations />
       <Header />
-      <main className="flex flex-col gap-16 md:gap-24 lg:gap-32">
+      <main>
         <div id="home"><Hero /></div>
         <div id="how-it-works"><HowItWorks /></div>
         <div id="features"><Features /></div>
