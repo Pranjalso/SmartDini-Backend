@@ -27,15 +27,15 @@ const Hero = () => {
             <div className="flex flex-wrap justify-center lg:justify-start gap-4 md:gap-8 py-4">
               <div className="text-center min-w-[100px] md:min-w-0 ">
                 <div className="text-3xl font-bold text-secondary">30%</div>
-                <div className="text-sm text-muted-foreground group-hover:text-brand-red transition-colors duration-300">Faster Orders</div>
+                <div className="text-sm text-muted-foreground">Faster Orders</div>
               </div>
               <div className="text-center min-w-[100px] md:min-w-0">
                 <div className="text-3xl font-bold text-secondary">50%</div>
-                <div className="text-sm text-muted-foreground group-hover:text-brand-red transition-colors duration-300">Less Wait Time</div>
+                <div className="text-sm text-muted-foreground">Less Wait Time</div>
               </div>
               <div className="text-center min-w-[100px] md:min-w-0">
                 <div className="text-3xl font-bold text-secondary">95%</div>
-                <div className="text-sm text-muted-foreground group-hover:text-brand-red transition-colors duration-300">Customer Satisfaction</div>
+                <div className="text-sm text-muted-foreground ">Customer Satisfaction</div>
               </div>
             </div>
 

@@ -11,11 +11,10 @@ const useToast = () => {
   const toast = ({ title, description, type = 'success' }: { title: string; description?: string; type?: 'success' | 'error' | 'info' }) => {
     const id = Math.random().toString(36).substr(2, 9);
     setToasts((prev) => [...prev, { id, title, description, type }]);
-    
-    // Auto dismiss after 4 seconds
+    // Auto dismiss after 8 seconds
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
+    }, 8000);
   };
 
   const dismiss = (id: string) => {
@@ -46,21 +45,26 @@ const ToastProvider = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-const ToastViewport = () => {
+const ToastViewport = ({ children }: { children: React.ReactNode }) => {
   return (
     <div
       style={{
         position: 'fixed',
-        top: '20px',
-        right: '20px',
-        zIndex: 9999,
+        top: 24,
+        right: 24,
+        zIndex: 2147483647,
         display: 'flex',
         flexDirection: 'column',
-        gap: '10px',
-        maxWidth: '400px',
-        width: '100%',
+        alignItems: 'flex-end',
+        gap: 12,
+        maxWidth: 360,
+        width: 'auto',
+        pointerEvents: 'none',
       }}
-    />
+      aria-live="polite"
+    >
+      {children}
+    </div>
   );
 };
 
@@ -86,15 +90,22 @@ const Toast = ({
       style={{
         backgroundColor: getBackgroundColor(),
         color: 'white',
-        padding: '16px 20px',
-        borderRadius: '12px',
-        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-        animation: 'slideIn 0.3s ease-out',
+        padding: '14px 20px 14px 18px',
+        borderRadius: 10,
+        boxShadow: '0 4px 24px 0 rgba(0,0,0,0.12)',
+        animation: 'slideIn 0.25s cubic-bezier(.4,0,.2,1)',
         position: 'relative',
-        width: '100%',
-        backdropFilter: 'blur(8px)',
-        border: '1px solid rgba(255, 255, 255, 0.2)',
+        minWidth: 260,
+        maxWidth: 360,
+        marginBottom: 0,
+        pointerEvents: 'auto',
+        fontFamily: 'Poppins, sans-serif',
+        border: 'none',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-start',
       }}
+      role="status"
     >
       {children}
     </div>
@@ -197,11 +208,10 @@ export default function SuperAdmin() {
   const toast = ({ title, description, type = 'success' }: { title: string; description?: string; type?: 'success' | 'error' | 'info' }) => {
     const id = Math.random().toString(36).substr(2, 9);
     setToasts((prev) => [...prev, { id, title, description, type }]);
-    
-    // Auto dismiss after 4 seconds
+    // Auto dismiss after 8 seconds
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
+    }, 8000);
   };
 
   const dismissToast = (id: string) => {
@@ -573,14 +583,15 @@ export default function SuperAdmin() {
   return (
     <>
       <ToastProvider>
-        <ToastViewport />
-        {toasts.map(({ id, title, description, type }) => (
-          <Toast key={id} type={type} onOpenChange={(open) => !open && dismissToast(id)}>
-            <ToastTitle>{title}</ToastTitle>
-            {description && <ToastDescription>{description}</ToastDescription>}
-            <ToastClose onClick={() => dismissToast(id)} />
-          </Toast>
-        ))}
+        <ToastViewport>
+          {toasts.map(({ id, title, description, type }) => (
+            <Toast key={id} type={type} onOpenChange={(open) => !open && dismissToast(id)}>
+              <ToastTitle>{title}</ToastTitle>
+              {description && <ToastDescription>{description}</ToastDescription>}
+              <ToastClose onClick={() => dismissToast(id)} />
+            </Toast>
+          ))}
+        </ToastViewport>
       </ToastProvider>
 
       <div className="dashboard-container">

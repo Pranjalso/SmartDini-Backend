@@ -29,7 +29,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [loggingOut, setLoggingOut] = useState(false);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [shouldPulse, setShouldPulse] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('admin-sound-enabled');
+      return stored === null ? true : stored === 'true';
+    }
+    return true;
+  });
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [subscriptionExpired, setSubscriptionExpired] = useState(false);
   const [cafeDeactivated, setCafeDeactivated] = useState(false);
@@ -84,14 +90,36 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, [soundEnabled, audioUnlocked]);
 
-  // Trigger sound when newOrdersCount increases
+  // BroadcastChannel to prevent duplicate sound/orders across tabs/pages
+  const broadcastRef = useRef<BroadcastChannel | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!broadcastRef.current) {
+      broadcastRef.current = new BroadcastChannel('admin-orders');
+    }
+    const channel = broadcastRef.current;
+    const onMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'NEW_ORDER' && event.data.count > lastCountRef.current) {
+        lastCountRef.current = event.data.count;
+        playNotificationSound();
+      }
+    };
+    channel.addEventListener('message', onMessage);
+    return () => channel.removeEventListener('message', onMessage);
+  }, [playNotificationSound]);
+
+  // Only one tab/page should play sound and update lastCountRef
   useEffect(() => {
     if (isFirstLoad.current) return;
-    
     if (newOrdersCount > lastCountRef.current) {
+      // Broadcast to all tabs/pages
+      if (broadcastRef.current) {
+        broadcastRef.current.postMessage({ type: 'NEW_ORDER', count: newOrdersCount });
+      }
+      // Play sound and update lastCountRef in this tab
+      lastCountRef.current = newOrdersCount;
       playNotificationSound();
     }
-    lastCountRef.current = newOrdersCount;
   }, [newOrdersCount, playNotificationSound]);
 
   // Function to unlock audio (triggered by user click)
@@ -116,9 +144,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (!audioUnlocked) {
       handleUnlockAudio();
     } else {
-      setSoundEnabled(!soundEnabled);
+      setSoundEnabled((prev) => {
+        localStorage.setItem('admin-sound-enabled', String(!prev));
+        return !prev;
+      });
     }
   };
+  // Keep soundEnabled in sync with localStorage (in case of manual change or multi-tab)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('admin-sound-enabled', String(soundEnabled));
+  }, [soundEnabled]);
 
   // Fetch stats and check subscription using SWR
   const statsUrl = menupages ? `/api/orders/${menupages}?status=pending` : null;

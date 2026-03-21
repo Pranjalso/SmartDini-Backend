@@ -206,7 +206,6 @@ export default function PaymentCompletedPage() {
   const getOrdersUrl = () => {
     if (!slug) return null;
     let url = `/api/orders/${slug}?paymentStatus=completed`;
-    
     const today = getTodayDateString();
     if (selectedDate !== today) {
       url += `&date=${selectedDate}`;
@@ -218,11 +217,15 @@ export default function PaymentCompletedPage() {
       } else if (dateFilter === "7d") {
         const start = new Date();
         start.setDate(start.getDate() - 7);
-        url += `&startDate=${start.toISOString()}&endDate=${new Date().toISOString()}`;
+        const startDate = start.toISOString().split('T')[0];
+        const endDate = new Date().toISOString().split('T')[0];
+        url += `&startDate=${startDate}&endDate=${endDate}`;
       } else if (dateFilter === "30d") {
         const start = new Date();
         start.setDate(start.getDate() - 30);
-        url += `&startDate=${start.toISOString()}&endDate=${new Date().toISOString()}`;
+        const startDate = start.toISOString().split('T')[0];
+        const endDate = new Date().toISOString().split('T')[0];
+        url += `&startDate=${startDate}&endDate=${endDate}`;
       } else {
         url += `&date=${today}`;
       }

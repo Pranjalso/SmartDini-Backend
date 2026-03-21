@@ -42,7 +42,6 @@
   
   /* Fonts */
   --font-sans: 'Poppins', sans-serif;
-  --font-valleyzabira: 'ValleyZabira', serif;
   
   /* Radius */
   --radius-sm: calc(var(--radius) - 4px);
@@ -117,17 +116,7 @@
 }
 
 /* Custom Font */
-@font-face {
-  font-family: 'ValleyZabira';
-  src: url('/fonts/ValleyZabiraDemo-Jpv47.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
-
-.smartdiniFont {
-  font-family: var(--font-valleyzabira);
-}
+/* Removed ValleyZabira font-face and .smartdiniFont class */
 
 /* Custom components */
 @layer components {
@@ -230,7 +219,7 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
   }
 }
 
