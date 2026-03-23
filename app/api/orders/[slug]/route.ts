@@ -37,31 +37,23 @@ export const GET = withCafeAccess(async (
       query.paymentStatus = paymentStatus;
     }
 
+    // Improved date handling to be more robust
     if (date) {
       const targetDate = new Date(date);
-      if (isNaN(targetDate.getTime())) {
-        throw new Error('Invalid date format');
+      if (!isNaN(targetDate.getTime())) {
+        const startDate = new Date(targetDate);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(targetDate);
+        endDate.setHours(23, 59, 59, 999);
+        query.createdAt = { $gte: startDate, $lte: endDate };
       }
-      targetDate.setHours(0, 0, 0, 0);
-      const nextDate = new Date(targetDate);
-      nextDate.setDate(nextDate.getDate() + 1);
-      
-      query.createdAt = {
-        $gte: targetDate,
-        $lt: nextDate,
-      };
-    }
-
-    if (startDate && endDate) {
+    } else if (startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
-      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        throw new Error('Invalid start or end date format');
+      if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+        end.setHours(23, 59, 59, 999); // Ensure end date includes the full day
+        query.createdAt = { $gte: start, $lte: end };
       }
-      query.createdAt = {
-        $gte: start,
-        $lte: end,
-      };
     }
 
     const orders = await Order.find(query)

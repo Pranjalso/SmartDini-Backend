@@ -33,8 +33,14 @@ function getTodayDateString() {
   return today.toISOString().split('T')[0];
 }
 
+function getYesterdayDateString() {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  return yesterday.toISOString().split('T')[0];
+}
+
 // Date filter options
-type DateFilterOption = "today" | "yesterday" | "7d" | "30d";
+type DateFilterOption = "today" | "yesterday" | "7d" | "30d" | "overall";
 
 // ─── Component for Individual Order Card ───
 function OrderCard({ order }: { order: Order }) {
@@ -205,31 +211,35 @@ export default function PaymentCompletedPage() {
   // Generate the URL based on filters
   const getOrdersUrl = () => {
     if (!slug) return null;
+
     let url = `/api/orders/${slug}?paymentStatus=completed`;
-    const today = getTodayDateString();
-    if (selectedDate !== today) {
-      url += `&date=${selectedDate}`;
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+
+    // Handle date filters first
+    if (dateFilter === "yesterday") {
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+      url += `&date=${yesterday.toISOString().split('T')[0]}`;
+    } else if (dateFilter === "7d") {
+      const endDate = new Date(today);
+      const startDate = new Date(today);
+      startDate.setDate(today.getDate() - 6); // 6 days before today = 7 days total
+      url += `&startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}`;
+    } else if (dateFilter === "30d") {
+      const endDate = new Date(today);
+      const startDate = new Date(today);
+      startDate.setDate(today.getDate() - 29); // 29 days before today = 30 days total
+      url += `&startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}`;
+    } else if (dateFilter === "overall") {
+      // For overall, we don't append date or range filters
+    } else if (dateFilter === "today") {
+      url += `&date=${todayStr}`;
     } else {
-      const date = new Date();
-      if (dateFilter === "yesterday") {
-        date.setDate(date.getDate() - 1);
-        url += `&date=${date.toISOString().split('T')[0]}`;
-      } else if (dateFilter === "7d") {
-        const start = new Date();
-        start.setDate(start.getDate() - 7);
-        const startDate = start.toISOString().split('T')[0];
-        const endDate = new Date().toISOString().split('T')[0];
-        url += `&startDate=${startDate}&endDate=${endDate}`;
-      } else if (dateFilter === "30d") {
-        const start = new Date();
-        start.setDate(start.getDate() - 30);
-        const startDate = start.toISOString().split('T')[0];
-        const endDate = new Date().toISOString().split('T')[0];
-        url += `&startDate=${startDate}&endDate=${endDate}`;
-      } else {
-        url += `&date=${today}`;
-      }
+      // Fallback to selectedDate if no filter is active or if it's a custom date
+      url += `&date=${selectedDate}`;
     }
+
     return url;
   };
 
@@ -285,8 +295,18 @@ export default function PaymentCompletedPage() {
 
   // Handle date picker change
   const handleDatePickerChange = (date: string) => {
-    setSelectedDate(date);
-    setDateFilter("today");
+    if (date) {
+      setSelectedDate(date);
+      
+      // Determine filter from picked date
+      if (date === getTodayDateString()) {
+        setDateFilter("today");
+      } else if (date === getYesterdayDateString()) {
+        setDateFilter("yesterday");
+      } else {
+        setDateFilter("today"); // Fallback for custom single date
+      }
+    }
   };
 
   // Filter orders based on search
@@ -308,22 +328,30 @@ export default function PaymentCompletedPage() {
   // Get display text for date filter
   const getDateFilterDisplay = () => {
     const today = getTodayDateString();
-    if (selectedDate !== today) {
-      return new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    }
-    switch (dateFilter) {
-      case "today": return "Today";
-      case "yesterday": return "Yesterday";
-      case "7d": return "Last 7 Days";
-      case "30d": return "Last 30 Days";
-      default: return "Today";
-    }
+    const yesterday = getYesterdayDateString();
+    
+    if (selectedDate === today && dateFilter === "today") return "Today";
+    if (selectedDate === yesterday && dateFilter === "yesterday") return "Yesterday";
+    if (dateFilter === "7d") return "Last 7 Days";
+    if (dateFilter === "30d") return "Last 30 Days";
+    if (dateFilter === "overall") return "Overall";
+    
+    // For custom date
+    return new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   const handleDateFilterSelect = (option: DateFilterOption) => {
     setDateFilter(option);
     setShowDropdown(false);
-    setSelectedDate(getTodayDateString());
+
+    // Dynamically update date picker based on preset
+    if (option === "today") {
+      setSelectedDate(getTodayDateString());
+    } else if (option === "yesterday") {
+      setSelectedDate(getYesterdayDateString());
+    } else if (option === "7d" || option === "30d" || option === "overall") {
+      setSelectedDate(getTodayDateString());
+    }
   };
 
   return (
@@ -391,6 +419,12 @@ export default function PaymentCompletedPage() {
                     className={`w-full text-left px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs hover:bg-[#FFEFEF] transition-colors ${dateFilter === '30d' ? 'bg-[#FFEFEF] text-[#D92632] font-medium' : 'text-gray-700'}`}
                   >
                     Last 30 Days
+                  </button>
+                  <button
+                    onClick={() => handleDateFilterSelect("overall")}
+                    className={`w-full text-left px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs hover:bg-[#FFEFEF] transition-colors ${dateFilter === 'overall' ? 'bg-[#FFEFEF] text-[#D92632] font-medium' : 'text-gray-700'}`}
+                  >
+                    Overall
                   </button>
                 </div>
               </div>

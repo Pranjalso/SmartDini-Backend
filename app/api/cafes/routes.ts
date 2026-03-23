@@ -192,7 +192,7 @@ export const POST = withAuth(async (req: AuthRequest) => {
     const baseUrl =
       process.env.NEXT_PUBLIC_APP_URL ||
       origin ||
-      'https://smart-dini-backend.vercel.app/';
+      'http://localhost:3000';
 
     const menuUrl = `${baseUrl}/${slug}/menu`;
     const adminUrl = `${baseUrl}/${slug}/admin`;

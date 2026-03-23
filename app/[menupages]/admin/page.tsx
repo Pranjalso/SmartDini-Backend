@@ -106,18 +106,30 @@ const DashboardSkeleton = () => {
   );
 };
 
+// ─── Helpers ───
+function getTodayDateString() {
+  const today = new Date();
+  return today.toISOString().split('T')[0];
+}
+
+function getYesterdayDateString() {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  return yesterday.toISOString().split('T')[0];
+}
+
 export default function DashboardPage() {
   const params = useParams();
   const slug = params?.menupages as string;
   
   const [period, setPeriod] = useState("today");
   const [showDropdown, setShowDropdown] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getTodayDateString());
   
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Define dynamic cache key based on filters
-  const statsUrl = slug ? `/api/orders/${slug}/stats?period=${period}${period === "custom" ? `&date=${selectedDate}` : ""}` : null;
+  const statsUrl = slug ? `/api/orders/${slug}/stats?period=${period}${period === "custom" || period === "today" || period === "yesterday" ? `&date=${selectedDate}` : ""}` : null;
 
   // Use SWR for memory caching and fast data fetching
   const { data, isLoading: swrLoading, isValidating } = useSWR(statsUrl, {
@@ -156,15 +168,30 @@ export default function DashboardPage() {
   const handlePeriodSelect = (value: string) => {
     setPeriod(value);
     setShowDropdown(false);
-    if (value !== "custom") {
-      setSelectedDate(new Date().toISOString().split('T')[0]);
+    
+    // Dynamically update date picker based on preset
+    if (value === "today") {
+      setSelectedDate(getTodayDateString());
+    } else if (value === "yesterday") {
+      setSelectedDate(getYesterdayDateString());
+    } else if (value === "7d" || value === "30d" || value === "overall") {
+      setSelectedDate(getTodayDateString());
     }
   };
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.value) {
-      setSelectedDate(e.target.value);
-      setPeriod("custom");
+    const newDate = e.target.value;
+    if (newDate) {
+      setSelectedDate(newDate);
+      
+      // Determine period from picked date
+      if (newDate === getTodayDateString()) {
+        setPeriod("today");
+      } else if (newDate === getYesterdayDateString()) {
+        setPeriod("yesterday");
+      } else {
+        setPeriod("custom");
+      }
     }
   };
 

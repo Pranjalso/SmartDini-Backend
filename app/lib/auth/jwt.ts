@@ -6,18 +6,21 @@ const JWT_SECRET = process.env.JWT_SECRET!;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET!;
 
 export const generateTokens = (payload: JwtPayload) => {
-  // Industry standard: Long-lived tokens for admin sessions as requested
-  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '30d' });
-  const refreshToken = jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '90d' });
+  // 🔥 Access token expires in 1 day (auto logout)
+  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
+
+  // 🔥 Refresh token also expires in 1 day for Super Admin and Cafe Admin as requested
+  const refreshToken = jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '1d' });
   
   return { token, refreshToken };
 };
 
 export const verifyToken = (token: string): JwtPayload | null => {
   try {
+    // 🔥 This automatically checks expiry (exp)
     return jwt.verify(token, JWT_SECRET) as JwtPayload;
   } catch (error) {
-    return null;
+    return null; // expired or invalid token
   }
 };
 
@@ -30,19 +33,21 @@ export const verifyRefreshToken = (token: string): JwtPayload | null => {
 };
 
 export const setTokenCookies = (token: string, refreshToken: string) => {
+  // 🔥 Access token cookie (1 day)
   cookies().set('token', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 30, // 30 days
+    maxAge: 60 * 60 * 24, // ✅ 1 day
     path: '/',
   });
 
+  // Refresh token cookie (1 day)
   cookies().set('refreshToken', refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 90, // 90 days
+    maxAge: 60 * 60 * 24, // ✅ 1 day
     path: '/',
   });
 };

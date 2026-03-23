@@ -15,25 +15,38 @@ export const GET = withCafeAccess(async (
     const date = searchParams.get('date');
     const slug = params.slug;
 
-    let startDate = new Date();
-    let endDate = new Date();
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
+    let startDate, endDate;
 
-    if (period === 'yesterday') {
-      startDate.setDate(startDate.getDate() - 1);
-      endDate.setDate(endDate.getDate() - 1);
+    // Base the date calculations on the provided date string if available, otherwise use today
+    const baseDate = date ? new Date(date) : new Date();
+    if (isNaN(baseDate.getTime())) {
+      return NextResponse.json({ success: false, message: 'Invalid date provided' }, { status: 400 });
+    }
+
+    if (period === 'today' || period === 'custom') {
+      startDate = new Date(baseDate);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(baseDate);
+      endDate.setHours(23, 59, 59, 999);
+    } else if (period === 'yesterday') {
+      const yesterday = new Date(baseDate);
+      yesterday.setDate(yesterday.getDate() - 1);
+      startDate = new Date(yesterday);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(yesterday);
+      endDate.setHours(23, 59, 59, 999);
     } else if (period === '7d') {
-      startDate.setDate(startDate.getDate() - 7);
+      endDate = new Date(baseDate);
+      endDate.setHours(23, 59, 59, 999);
+      startDate = new Date(baseDate);
+      startDate.setDate(startDate.getDate() - 6);
       startDate.setHours(0, 0, 0, 0);
     } else if (period === '30d') {
-      startDate.setDate(startDate.getDate() - 30);
-      startDate.setHours(0, 0, 0, 0);
-    } else if (period === 'custom' && date) {
-      startDate = new Date(date);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(date);
+      endDate = new Date(baseDate);
       endDate.setHours(23, 59, 59, 999);
+      startDate = new Date(baseDate);
+      startDate.setDate(startDate.getDate() - 29);
+      startDate.setHours(0, 0, 0, 0);
     }
 
     const query: any = {

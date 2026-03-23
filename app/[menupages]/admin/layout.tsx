@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useCallback, useRef } from "react";
 import useSWR, { mutate } from "swr";
+import Pusher from 'pusher-js';
 import {
   LayoutDashboard,
   Bell,
@@ -20,6 +21,8 @@ import {
   VolumeX,
 } from "lucide-react";
 
+import useLocalStorage from "@/hooks/use-local-storage";
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const params = useParams();
@@ -29,66 +32,83 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [loggingOut, setLoggingOut] = useState(false);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [shouldPulse, setShouldPulse] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('admin-sound-enabled');
-      return stored === null ? true : stored === 'true';
-    }
-    return true;
-  });
+  const [soundEnabled, setSoundEnabled] = useLocalStorage('admin-sound-enabled', true);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [subscriptionExpired, setSubscriptionExpired] = useState(false);
   const [cafeDeactivated, setCafeDeactivated] = useState(false);
   const isFirstLoad = useRef(true);
   const lastCountRef = useRef(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Initialize audio object
+  // Initialize audio system and set up aggressive unlocking
   useEffect(() => {
-    // Industry standard notification sound (clean bell)
-    const audio = new Audio("https://image2url.com/r2/default/audio/1773926314850-ea784a83-c3fd-40d8-88ae-b4edaafa0980.mp3");
-    audio.volume = 0.9;
-    audio.preload = "auto";
-    audioRef.current = audio;
-
-    // Check if already unlocked (some browsers might allow it if previously interacted)
-    const checkUnlock = async () => {
-      try {
-        await audio.play();
-        audio.pause();
-        audio.currentTime = 0;
-        setAudioUnlocked(true);
-      } catch (e) {
-        setAudioUnlocked(false);
+    const unlockAudio = async () => {
+      if (audioRef.current && !audioUnlocked) {
+        try {
+          // Play a silent or very short sound to unlock
+          audioRef.current.volume = 0.9;
+          await audioRef.current.play();
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+          setAudioUnlocked(true);
+          // Notify other tabs
+          if (broadcastRef.current) {
+            broadcastRef.current.postMessage({ type: 'AUDIO_UNLOCKED' });
+          }
+          // Remove listeners
+          window.removeEventListener('click', unlockAudio);
+          window.removeEventListener('keydown', unlockAudio);
+          window.removeEventListener('touchstart', unlockAudio);
+          console.log("Audio system unlocked via user interaction");
+        } catch (error) {
+          // Still blocked
+        }
       }
     };
-    checkUnlock();
-  }, []);
+
+    window.addEventListener('click', unlockAudio);
+    window.addEventListener('keydown', unlockAudio);
+    window.addEventListener('touchstart', unlockAudio);
+
+    return () => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+    };
+  }, [audioUnlocked]);
+
+  // Handle Visibility Change to re-trigger audio if tab comes to foreground
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !audioUnlocked) {
+        // Try to unlock again if user returns to tab
+        console.log("Tab became visible, checking audio unlock status...");
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [audioUnlocked]);
 
   // Play notification sound helper
-  const playNotificationSound = useCallback(() => {
-    if (!soundEnabled || !audioUnlocked || !audioRef.current) {
-      console.log("Sound skipped: Enabled:", soundEnabled, "Unlocked:", audioUnlocked);
-      return;
-    }
-    
+  const playNotificationSound = useCallback(async () => {
+    if (!soundEnabled || !audioRef.current) return;
+
     try {
+      // Ensure the audio is ready
       audioRef.current.currentTime = 0;
       const playPromise = audioRef.current.play();
       
       if (playPromise !== undefined) {
-        playPromise.catch(e => {
-          console.warn("Audio playback blocked by browser:", e);
-          setAudioUnlocked(false);
-        });
+        await playPromise;
+        setAudioUnlocked(true);
+        setShouldPulse(true);
+        setTimeout(() => setShouldPulse(false), 5000);
       }
-      
-      setShouldPulse(true);
-      setTimeout(() => setShouldPulse(false), 5000);
     } catch (err) {
-      console.error("Sound execution error:", err);
+      console.warn("Audio playback blocked by browser policies. Interaction needed.", err);
+      setAudioUnlocked(false);
     }
-  }, [soundEnabled, audioUnlocked]);
+  }, [soundEnabled]);
 
   // BroadcastChannel to prevent duplicate sound/orders across tabs/pages
   const broadcastRef = useRef<BroadcastChannel | null>(null);
@@ -101,72 +121,71 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const onMessage = (event: MessageEvent) => {
       if (event.data && event.data.type === 'NEW_ORDER' && event.data.count > lastCountRef.current) {
         lastCountRef.current = event.data.count;
+        // Play sound even if background (browser allows if user ever interacted)
         playNotificationSound();
+      } else if (event.data && event.data.type === 'AUDIO_UNLOCKED') {
+        setAudioUnlocked(true);
       }
     };
     channel.addEventListener('message', onMessage);
     return () => channel.removeEventListener('message', onMessage);
   }, [playNotificationSound]);
 
-  // Only one tab/page should play sound and update lastCountRef
-  useEffect(() => {
-    if (isFirstLoad.current) return;
-    if (newOrdersCount > lastCountRef.current) {
-      // Broadcast to all tabs/pages
-      if (broadcastRef.current) {
-        broadcastRef.current.postMessage({ type: 'NEW_ORDER', count: newOrdersCount });
-      }
-      // Play sound and update lastCountRef in this tab
-      lastCountRef.current = newOrdersCount;
-      playNotificationSound();
-    }
-  }, [newOrdersCount, playNotificationSound]);
-
-  // Function to unlock audio (triggered by user click)
-  const handleUnlockAudio = () => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play()
-        .then(() => {
-          setAudioUnlocked(true);
-          setSoundEnabled(true);
-          console.log("Audio system unlocked successfully");
-        })
-        .catch((err) => {
-          console.error("Failed to unlock audio:", err);
-          setAudioUnlocked(false);
-        });
-    }
-  };
+  // Note: Notification sound and broadcasting logic moved to SWR onSuccess for better reliability
 
   // Toggle sound preference (Mute/Unmute)
-  const toggleSoundPreference = () => {
-    if (!audioUnlocked) {
-      handleUnlockAudio();
-    } else {
-      setSoundEnabled((prev) => {
-        localStorage.setItem('admin-sound-enabled', String(!prev));
-        return !prev;
-      });
+  const toggleSoundPreference = async () => {
+    const newState = !soundEnabled;
+    setSoundEnabled(newState);
+    
+    // If enabling, try to play a test sound to unlock the audio context immediately
+    if (newState && audioRef.current) {
+      try {
+        audioRef.current.currentTime = 0;
+        audioRef.current.volume = 0.5; // lower for test
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          await playPromise;
+          setAudioUnlocked(true);
+          console.log("Audio system explicitly unlocked via icon click");
+          // Reset to full volume for actual notifications
+          audioRef.current.volume = 0.9;
+        }
+      } catch (e) {
+        console.warn("Browser still blocking audio. User needs to interact more.", e);
+        setAudioUnlocked(false);
+      }
     }
   };
-  // Keep soundEnabled in sync with localStorage (in case of manual change or multi-tab)
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem('admin-sound-enabled', String(soundEnabled));
-  }, [soundEnabled]);
+
 
   // Fetch stats and check subscription using SWR
   const statsUrl = menupages ? `/api/orders/${menupages}?status=pending` : null;
   const { data: statsData } = useSWR(statsUrl, {
-    refreshInterval: 10000, // Industry standard polling for real-time dashboard
+    refreshInterval: 5000, // Faster polling (5s) for real-time dashboard
     onSuccess: (data) => {
       if (data.success && data.stats) {
-        setNewOrdersCount(data.stats.pending || 0);
+        const count = data.stats.pending || 0;
+        
+        // Only trigger sound if the count has INCREASED
+        if (!isFirstLoad.current && count > lastCountRef.current) {
+          playNotificationSound();
+          // Broadcast to all other tabs
+          if (broadcastRef.current) {
+            broadcastRef.current.postMessage({ type: 'NEW_ORDER', count: count });
+          }
+        }
+        
+        // Update the lastCountRef for comparison in next poll
+        lastCountRef.current = count;
+        setNewOrdersCount(count);
         isFirstLoad.current = false;
       }
     }
   });
+
+  // Sidebar badge count (prioritize SWR data for instant reactivity)
+  const currentBadgeCount = statsData?.stats?.pending ?? newOrdersCount;
 
   const statusUrl = menupages ? `/api/cafes/${menupages}/public` : null;
   const { data: statusData } = useSWR(statusUrl, {
@@ -195,7 +214,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const navItems = [
     { label: "Dashboard", href: base, icon: LayoutDashboard },
-    { label: "New Orders", href: `${base}/new-orders`, icon: Bell, badge: newOrdersCount },
+    { label: "New Orders", href: `${base}/new-orders`, icon: Bell, badge: currentBadgeCount },
     { label: "Orders", href: `${base}/orders`, icon: ClipboardList },
     { label: "Payment Completed", href: `${base}/payment-completed`, icon: CheckCircle },
     { label: "Manage Menu", href: `${base}/manage-menu`, icon: UtensilsCrossed },
@@ -224,6 +243,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="min-h-screen bg-[#F5F5F5] font-poppins">
+      {/* Hidden Audio Element for Notifications */}
+      <audio 
+        ref={audioRef}
+        src="https://image2url.com/r2/default/audio/1773926314850-ea784a83-c3fd-40d8-88ae-b4edaafa0980.mp3" 
+        preload="auto"
+        className="hidden"
+        onCanPlayThrough={() => console.log("Audio loaded and ready")}
+        onError={(e) => console.error("Audio failed to load:", e)}
+      />
+      
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -320,17 +349,37 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
             <div className="flex items-center gap-3">
               {/* Audio Control */}
-              <button
-                onClick={toggleSoundPreference}
-                className={`w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-300 mr-1 ${!audioUnlocked ? 'animate-pulse ring-2 ring-white/30 ring-offset-2 ring-offset-[#D92632]' : ''}`}
-                title={!audioUnlocked ? "Click to enable sound system" : (soundEnabled ? "Mute notifications" : "Unmute notifications")}
-              >
-                {soundEnabled && audioUnlocked ? (
-                  <Volume2 size={18} className="text-white" />
-                ) : (
-                  <VolumeX size={18} className={`text-white ${!audioUnlocked ? 'opacity-100' : 'opacity-60'}`} />
+              <div className="relative group">
+                <button
+                  onClick={toggleSoundPreference}
+                  className={`w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-300 mr-1 
+                    ${soundEnabled && !audioUnlocked ? 'animate-pulse ring-2 ring-white/30 ring-offset-2 ring-offset-[#D92632]' : ''}`}
+                  title={!audioUnlocked && soundEnabled ? "Click anywhere on the page to enable sound" : (soundEnabled ? "Mute notifications" : "Unmute notifications")}
+                >
+                  {soundEnabled ? (
+                    <Volume2 size={18} className={`text-white ${!audioUnlocked ? 'opacity-50' : 'opacity-100'}`} />
+                  ) : (
+                    <VolumeX size={18} className="text-white opacity-50" />
+                  )}
+                </button>
+                
+                {/* Audio Blocked Tooltip */}
+                {soundEnabled && !audioUnlocked && (
+                  <div className="fixed top-16 left-auto right-4 sm:right-auto sm:left-[calc(50%+120px)] -translate-x-1/2 w-60 bg-gray-900 text-white text-[12px] p-4 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-[99999] pointer-events-none text-center border border-white/20 animate-bounce-subtle backdrop-blur-md">
+                    {/* Tooltip Arrow */}
+                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-gray-900 rotate-45 border-l border-t border-white/20"></div>
+                    
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <div className="w-2.5 h-2.5 bg-[#D92632] rounded-full animate-ping"></div>
+                      <span className="font-bold text-white text-sm">Sound is Blocked</span>
+                    </div>
+                    <p className="text-gray-300 leading-tight">
+                      Browser prevents auto-play. 
+                      <span className="block font-black text-[#FFEB3B] mt-2 text-sm uppercase tracking-widest">Click anywhere to enable</span>
+                    </p>
+                  </div>
                 )}
-              </button>
+              </div>
 
               <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm">
                 <User size={18} className="text-[#D92632]" strokeWidth={2.5} />
@@ -402,8 +451,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
+        @keyframes bounce-subtle {
+          0%, 100% { transform: translate(-50%, 0); }
+          50% { transform: translate(-50%, -5px); }
+        }
         .animate-spin-slow {
           animation: spin-slow 8s linear infinite;
+        }
+        .animate-bounce-subtle {
+          animation: bounce-subtle 2s ease-in-out infinite;
         }
       `}</style>
     </div>
