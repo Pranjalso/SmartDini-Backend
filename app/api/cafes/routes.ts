@@ -186,13 +186,13 @@ export const POST = withAuth(async (req: AuthRequest) => {
 
     // Prepare base URL for links
     const protocol = req.headers.get('x-forwarded-proto') || 'http';
-    const host = req.headers.get('host') || 'localhost:3000';
+    const host = req.headers.get('host') || 'https://smart-dini-backend.vercel.app';
     const origin = `${protocol}://${host}`;
 
     const baseUrl =
       process.env.NEXT_PUBLIC_APP_URL ||
       origin ||
-      'http://localhost:3000';
+      'https://smart-dini-backend.vercel.app';
 
     const menuUrl = `${baseUrl}/${slug}/menu`;
     const adminUrl = `${baseUrl}/${slug}/admin`;
