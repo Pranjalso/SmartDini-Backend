@@ -1,16 +1,24 @@
-import jwt from 'jsonwebtoken';
+import jwt, { Secret, SignOptions } from 'jsonwebtoken';
 import { JwtPayload } from '@/types';
 import { cookies } from 'next/headers';
 
-const JWT_SECRET = process.env.JWT_SECRET!;
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET!;
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+
+if (typeof JWT_SECRET !== 'string' || typeof JWT_REFRESH_SECRET !== 'string') {
+  throw new Error('JWT secrets are not defined in the environment variables');
+}
 
 export const generateTokens = (payload: JwtPayload) => {
-  // 🔥 Access token expires in 1 day (auto logout)
-  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
+  // Access token expires in 1 day (configurable)
+  const token = jwt.sign(payload, JWT_SECRET, { 
+    expiresIn: (process.env.JWT_ACCESS_TOKEN_EXPIRES_IN || '1d') as SignOptions['expiresIn'] 
+  });
 
-  // 🔥 Refresh token also expires in 1 day for Super Admin and Cafe Admin as requested
-  const refreshToken = jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '1d' });
+  // Refresh token expires in 1 day (configurable)
+  const refreshToken = jwt.sign(payload, JWT_REFRESH_SECRET, { 
+    expiresIn: (process.env.JWT_REFRESH_TOKEN_EXPIRES_IN || '1d') as SignOptions['expiresIn'] 
+  });
   
   return { token, refreshToken };
 };
@@ -33,12 +41,12 @@ export const verifyRefreshToken = (token: string): JwtPayload | null => {
 };
 
 export const setTokenCookies = (token: string, refreshToken: string) => {
-  // 🔥 Access token cookie (1 day)
+  // Access token cookie (1 day)
   cookies().set('token', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 60 * 60 * 24, // ✅ 1 day
+    maxAge: 60 * 60 * 24, // 1 day
     path: '/',
   });
 
@@ -47,7 +55,7 @@ export const setTokenCookies = (token: string, refreshToken: string) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 60 * 60 * 24, // ✅ 1 day
+    maxAge: 60 * 60 * 24, // 1 day
     path: '/',
   });
 };
